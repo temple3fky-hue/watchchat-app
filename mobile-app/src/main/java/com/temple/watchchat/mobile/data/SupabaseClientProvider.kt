@@ -10,8 +10,8 @@ import io.github.jan.supabase.storage.Storage
 
 object SupabaseClientProvider {
     val client: SupabaseClient? by lazy {
-        val url = BuildConfig.SUPABASE_URL
-        val anonKey = BuildConfig.SUPABASE_ANON_KEY
+        val url = BuildConfig.SUPABASE_URL.trim()
+        val anonKey = BuildConfig.SUPABASE_ANON_KEY.trim()
 
         if (url.isBlank() || anonKey.isBlank()) {
             null
@@ -30,4 +30,14 @@ object SupabaseClientProvider {
 
     val isConfigured: Boolean
         get() = client != null
+
+    val isDemoModeAllowed: Boolean
+        get() = BuildConfig.ALLOW_DEMO_MODE
+
+    val productionConfigError: String?
+        get() = if (!isConfigured && !isDemoModeAllowed) {
+            "正式模式需要先配置 SUPABASE_URL 和 SUPABASE_ANON_KEY。"
+        } else {
+            null
+        }
 }
