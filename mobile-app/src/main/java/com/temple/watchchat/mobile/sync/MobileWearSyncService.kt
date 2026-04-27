@@ -64,8 +64,32 @@ class MobileWearSyncService : WearableListenerService() {
 
     private fun handleMarkChatRead(event: WearSyncEvent) {
         val request = event as? WearSyncEvent.MarkChatReadRequested ?: return
-        Log.d(TAG, "Mark chat read requested: chatId=${request.chatId}")
-        // TODO: 后续接入 messages.read_at / unread_count 后，在这里写入已读状态。
+
+        serviceScope.launch {
+            runCatching {
+                val repository = ChatRepositoryProvider.current()
+                repository.markChatRead(request.chatId)
+
+                val latestMessages = repository.getMessages(request.chatId)
+                MobileWearSyncClient.sendChatMessagesUpdated(
+                    context = this@MobileWearSyncService,
+                    event = WearSyncEvent.ChatMessagesUpdated(
+                        chatId = request.chatId,
+                        messages = latestMessages,
+                    ),
+                )
+
+                val latestChats = repository.getChats()
+                MobileWearSyncClient.sendChatListUpdated(
+                    context = this@MobileWearSyncService,
+                    event = WearSyncEvent.ChatListUpdated(chats = latestChats),
+                )
+            }.onSuccess {
+                Log.d(TAG, "Mark chat read handled: chatId=${request.chatId}")
+            }.onFailure { error ->
+                Log.w(TAG, "Failed to mark chat read: ${error.message}")
+            }
+        }
     }
 
     private fun sendTextFromWear(
@@ -81,7 +105,8 @@ class MobileWearSyncService : WearableListenerService() {
 
         serviceScope.launch {
             runCatching {
-                val sentMessage = ChatRepositoryProvider.current().sendTextMessage(
+                val repository = ChatRepositoryProvider.current()
+                val sentMessage = repository.sendTextMessage(
                     chatId = chatId,
                     content = cleanContent,
                 )
@@ -94,7 +119,7 @@ class MobileWearSyncService : WearableListenerService() {
                     ),
                 )
 
-                val latestMessages = ChatRepositoryProvider.current().getMessages(chatId)
+                val latestMessages = repository.getMessages(chatId)
                 MobileWearSyncClient.sendChatMessagesUpdated(
                     context = this@MobileWearSyncService,
                     event = WearSyncEvent.ChatMessagesUpdated(
@@ -103,7 +128,7 @@ class MobileWearSyncService : WearableListenerService() {
                     ),
                 )
 
-                val latestChats = ChatRepositoryProvider.current().getChats()
+                val latestChats = repository.getChats()
                 MobileWearSyncClient.sendChatListUpdated(
                     context = this@MobileWearSyncService,
                     event = WearSyncEvent.ChatListUpdated(chats = latestChats),
