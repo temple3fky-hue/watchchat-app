@@ -3,6 +3,9 @@ package com.temple.watchchat.wear.data
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
 import com.temple.watchchat.shared.model.MessageStatus
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * 手表端本地聊天缓存。
@@ -76,6 +79,9 @@ object WearFakeChatRepository {
     )
 
     private val syncedChats = mutableMapOf<String, Chat>()
+    private val mutableChangeVersion = MutableStateFlow(0)
+
+    val changeVersion: StateFlow<Int> = mutableChangeVersion.asStateFlow()
 
     fun getRecentChats(): List<Chat> {
         return if (syncedChats.isNotEmpty()) {
@@ -121,6 +127,7 @@ object WearFakeChatRepository {
                 unreadCount = unreadCounts[chat.id] ?: chat.unreadCount,
             )
         }
+        notifyChanged()
     }
 
     fun replaceMessages(
@@ -136,6 +143,7 @@ object WearFakeChatRepository {
                 updatedAtMillis = latest.createdAtMillis,
             )
         }
+        notifyChanged()
     }
 
     fun addIncomingMessage(
@@ -145,9 +153,9 @@ object WearFakeChatRepository {
         val messages = messagesByChatId.getOrPut(chatId) { mutableListOf() }
         if (messages.none { it.id == message.id }) {
             messages.add(message)
+            unreadCounts[chatId] = (unreadCounts[chatId] ?: 0) + 1
         }
 
-        unreadCounts[chatId] = (unreadCounts[chatId] ?: 0) + 1
         val chat = syncedChats[chatId]
         if (chat != null) {
             syncedChats[chatId] = chat.copy(
@@ -156,6 +164,7 @@ object WearFakeChatRepository {
                 updatedAtMillis = message.createdAtMillis,
             )
         }
+        notifyChanged()
     }
 
     fun sendQuickReply(
@@ -179,6 +188,7 @@ object WearFakeChatRepository {
                 updatedAtMillis = now,
             )
         }
+        notifyChanged()
         return message
     }
 
@@ -202,6 +212,7 @@ object WearFakeChatRepository {
         syncedChats[chatId]?.let { chat ->
             syncedChats[chatId] = chat.copy(unreadCount = 0)
         }
+        notifyChanged()
     }
 
     private fun buildChat(
@@ -216,5 +227,9 @@ object WearFakeChatRepository {
             lastMessagePreview = messagesByChatId[id]?.lastOrNull()?.content.orEmpty(),
             unreadCount = unreadCounts[id] ?: 0,
         )
+    }
+
+    private fun notifyChanged() {
+        mutableChangeVersion.value += 1
     }
 }
