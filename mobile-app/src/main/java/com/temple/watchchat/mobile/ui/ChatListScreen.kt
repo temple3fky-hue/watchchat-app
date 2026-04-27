@@ -27,13 +27,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.temple.watchchat.mobile.data.FakeChatRepository
 import com.temple.watchchat.shared.model.Chat
 
 @Composable
 fun ChatListScreen(
     onChatClick: (Chat) -> Unit,
 ) {
-    val chats = sampleChats()
+    val chats = FakeChatRepository.getChats()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -131,30 +132,4 @@ private fun ChatListItem(
             }
         }
     }
-}
-
-private fun sampleChats(): List<Chat> {
-    return listOf(
-        Chat(
-            id = "chat_001",
-            title = "小明",
-            participantIds = listOf("me", "user_001"),
-            lastMessagePreview = "晚上一起吃饭吗？",
-            unreadCount = 2,
-        ),
-        Chat(
-            id = "chat_002",
-            title = "阿强",
-            participantIds = listOf("me", "user_002"),
-            lastMessagePreview = "收到，我马上过去。",
-            unreadCount = 0,
-        ),
-        Chat(
-            id = "chat_003",
-            title = "家人",
-            participantIds = listOf("me", "user_003"),
-            lastMessagePreview = "路上注意安全。",
-            unreadCount = 1,
-        ),
-    )
 }
