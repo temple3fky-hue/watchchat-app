@@ -1,5 +1,10 @@
 package com.temple.watchchat.wear.ui
 
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
 import com.temple.watchchat.wear.data.WearFakeChatRepository
+import java.util.Locale
 
 @Composable
 fun WearChatDetailScreen(
@@ -54,8 +60,41 @@ fun WearChatDetailScreen(
         statusText = "已回复：$text"
     }
 
+    val voiceInputLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenText = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+
+            if (spokenText.isNullOrEmpty()) {
+                statusText = "未识别到语音"
+            } else {
+                sendQuickReply(spokenText)
+            }
+        } else {
+            statusText = "已取消语音输入"
+        }
+    }
+
     fun startVoiceInput() {
-        statusText = "语音输入待接入"
+        statusText = "正在打开语音输入..."
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+            )
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "说出要回复的内容")
+        }
+
+        runCatching {
+            voiceInputLauncher.launch(intent)
+        }.onFailure {
+            statusText = "当前设备不支持语音输入"
+        }
     }
 
     Surface(
