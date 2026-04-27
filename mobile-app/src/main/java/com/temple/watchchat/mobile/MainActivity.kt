@@ -15,6 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +25,7 @@ import com.temple.watchchat.mobile.ui.AuthScreen
 import com.temple.watchchat.mobile.ui.ChatDetailScreen
 import com.temple.watchchat.mobile.ui.ChatListScreen
 import com.temple.watchchat.shared.model.Chat
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,6 +33,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme {
+                val scope = rememberCoroutineScope()
                 var authState by remember { mutableStateOf(AuthState.Checking) }
                 var selectedChat by remember { mutableStateOf<Chat?>(null) }
 
@@ -39,6 +42,14 @@ class MainActivity : ComponentActivity() {
                         AuthState.Authed
                     } else {
                         AuthState.Unauthed
+                    }
+                }
+
+                fun signOut() {
+                    scope.launch {
+                        AuthRepository.signOut()
+                        selectedChat = null
+                        authState = AuthState.Unauthed
                     }
                 }
 
@@ -60,6 +71,7 @@ class MainActivity : ComponentActivity() {
                         if (selectedChat == null) {
                             ChatListScreen(
                                 onChatClick = { chat -> selectedChat = chat },
+                                onSignOutClick = { signOut() },
                             )
                         } else {
                             ChatDetailScreen(
