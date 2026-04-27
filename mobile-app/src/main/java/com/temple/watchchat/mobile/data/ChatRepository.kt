@@ -2,6 +2,8 @@ package com.temple.watchchat.mobile.data
 
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 interface ChatRepository {
     suspend fun getChats(): List<Chat>
@@ -12,6 +14,8 @@ interface ChatRepository {
     ): Chat
 
     suspend fun getMessages(chatId: String): List<Message>
+
+    fun observeMessageChanges(chatId: String): Flow<Unit>
 
     suspend fun sendTextMessage(
         chatId: String,
@@ -63,6 +67,10 @@ private object LocalChatRepository : ChatRepository {
 
     override suspend fun getMessages(chatId: String): List<Message> {
         return FakeChatRepository.getMessages(chatId)
+    }
+
+    override fun observeMessageChanges(chatId: String): Flow<Unit> {
+        return emptyFlow()
     }
 
     override suspend fun sendTextMessage(
