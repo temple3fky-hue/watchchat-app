@@ -32,11 +32,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.temple.watchchat.mobile.data.ChatRepositoryProvider
+import com.temple.watchchat.mobile.sync.MobileWearSyncClient
 import com.temple.watchchat.shared.model.Chat
+import com.temple.watchchat.shared.sync.WearSyncEvent
 import kotlinx.coroutines.launch
 
 @Composable
@@ -44,6 +47,7 @@ fun ChatListScreen(
     onChatClick: (Chat) -> Unit,
     onSignOutClick: () -> Unit,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var chats by remember { mutableStateOf<List<Chat>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
@@ -51,9 +55,18 @@ fun ChatListScreen(
     var newChatTitle by remember { mutableStateOf("") }
     var otherUserEmail by remember { mutableStateOf("") }
 
+    fun syncChatsToWear(updatedChats: List<Chat>) {
+        MobileWearSyncClient.sendChatListUpdated(
+            context = context,
+            event = WearSyncEvent.ChatListUpdated(chats = updatedChats),
+        )
+    }
+
     suspend fun reloadChats() {
         isLoading = true
-        chats = ChatRepositoryProvider.current().getChats()
+        val latestChats = ChatRepositoryProvider.current().getChats()
+        chats = latestChats
+        syncChatsToWear(latestChats)
         isLoading = false
     }
 
@@ -68,7 +81,9 @@ fun ChatListScreen(
                 title = title,
                 otherUserEmail = email,
             )
-            chats = listOf(newChat) + chats
+            val updatedChats = listOf(newChat) + chats
+            chats = updatedChats
+            syncChatsToWear(updatedChats)
             newChatTitle = ""
             otherUserEmail = ""
             isCreating = false
@@ -156,7 +171,10 @@ fun ChatListScreen(
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(chats) { chat ->
+                    items(
+                        items = chats,
+                        key = { chat -> chat.id },
+                    ) { chat ->
                         ChatListItem(
                             chat = chat,
                             onClick = { onChatClick(chat) },
