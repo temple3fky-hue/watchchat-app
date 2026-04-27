@@ -1,8 +1,11 @@
 package com.temple.watchchat.shared.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * 一对一聊天会话。
  */
+@Serializable
 data class Chat(
     val id: String,
     val title: String,
