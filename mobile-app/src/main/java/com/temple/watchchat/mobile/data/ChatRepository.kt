@@ -21,6 +21,8 @@ interface ChatRepository {
         chatId: String,
         content: String,
     ): Message
+
+    suspend fun markChatRead(chatId: String)
 }
 
 object ChatRepositoryProvider {
@@ -104,5 +106,12 @@ private object LocalChatRepository : ChatRepository {
         }
 
         return message
+    }
+
+    override suspend fun markChatRead(chatId: String) {
+        val chatIndex = localChats.indexOfFirst { chat -> chat.id == chatId }
+        if (chatIndex >= 0) {
+            localChats[chatIndex] = localChats[chatIndex].copy(unreadCount = 0)
+        }
     }
 }
