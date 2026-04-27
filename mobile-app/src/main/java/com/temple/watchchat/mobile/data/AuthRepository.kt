@@ -16,8 +16,14 @@ object AuthRepository {
                 this.email = email
                 this.password = password
             }
+
+            if (client.auth.currentSessionOrNull() == null) {
+                AuthResult.Error("登录成功但没有获取到会话，请重新打开 App 后再试。")
+            } else {
+                AuthResult.Success(isFakeAuth = false)
+            }
         }.fold(
-            onSuccess = { AuthResult.Success(isFakeAuth = false) },
+            onSuccess = { result -> result },
             onFailure = { error -> AuthResult.Error(error.toUserMessage()) },
         )
     }
@@ -31,16 +37,27 @@ object AuthRepository {
             ?: return AuthResult.Success(isFakeAuth = true)
 
         return runCatching {
+            val cleanEmail = email.trim()
+            val cleanDisplayName = displayName.trim()
+
             client.auth.signUpWith(Email) {
-                this.email = email
+                this.email = cleanEmail
                 this.password = password
             }
 
-            // 第一版先只完成 Auth 注册。
-            // 用户资料 profiles 表会在下一步接入 Postgrest 后写入。
-            displayName.trim()
+            val user = client.auth.currentSessionOrNull()?.user
+            if (user == null) {
+                AuthResult.NeedsEmailConfirmation("注册成功，请先打开邮箱完成验证，然后再返回登录。")
+            } else {
+                ProfileRepository.upsertProfile(
+                    userId = user.id,
+                    email = cleanEmail,
+                    displayName = cleanDisplayName,
+                )
+                AuthResult.Success(isFakeAuth = false)
+            }
         }.fold(
-            onSuccess = { AuthResult.Success(isFakeAuth = false) },
+            onSuccess = { result -> result },
             onFailure = { error -> AuthResult.Error(error.toUserMessage()) },
         )
     }
@@ -54,6 +71,10 @@ object AuthRepository {
 sealed class AuthResult {
     data class Success(
         val isFakeAuth: Boolean,
+    ) : AuthResult()
+
+    data class NeedsEmailConfirmation(
+        val message: String,
     ) : AuthResult()
 
     data class Error(
