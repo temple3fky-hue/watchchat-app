@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * 手表端本地聊天缓存。
  *
- * 第一版先支持假数据和手机端同步数据混用。
- * 手机端通过 Wear Data Layer 推送数据后，会写入这里。
+ * 正式模式下默认显示手机端同步过来的真实数据。
+ * 如果手机端还没有同步数据，则返回空列表，避免显示开发假数据。
  */
 object WearFakeChatRepository {
+    private const val SHOW_DEMO_DATA_WHEN_NO_PHONE_SYNC = false
+
     private val messagesByChatId = mutableMapOf(
         "wear_chat_001" to mutableListOf(
             Message(
@@ -80,12 +82,13 @@ object WearFakeChatRepository {
 
     private val syncedChats = mutableMapOf<String, Chat>()
     private val mutableChangeVersion = MutableStateFlow(0)
+    private var hasReceivedPhoneSync = false
 
     val changeVersion: StateFlow<Int> = mutableChangeVersion.asStateFlow()
 
     fun getRecentChats(): List<Chat> {
-        return if (syncedChats.isNotEmpty()) {
-            syncedChats.values
+        return when {
+            syncedChats.isNotEmpty() -> syncedChats.values
                 .map { chat ->
                     val lastMessage = messagesByChatId[chat.id]?.lastOrNull()
                     chat.copy(
@@ -95,24 +98,10 @@ object WearFakeChatRepository {
                     )
                 }
                 .sortedByDescending { chat -> chat.updatedAtMillis }
-        } else {
-            listOf(
-                buildChat(
-                    id = "wear_chat_001",
-                    title = "小明",
-                    participantIds = listOf("me", "user_001"),
-                ),
-                buildChat(
-                    id = "wear_chat_002",
-                    title = "阿强",
-                    participantIds = listOf("me", "user_002"),
-                ),
-                buildChat(
-                    id = "wear_chat_003",
-                    title = "家人",
-                    participantIds = listOf("me", "user_003"),
-                ),
-            )
+
+            SHOW_DEMO_DATA_WHEN_NO_PHONE_SYNC && !hasReceivedPhoneSync -> getDemoChats()
+
+            else -> emptyList()
         }
     }
 
@@ -121,6 +110,7 @@ object WearFakeChatRepository {
     }
 
     fun replaceChats(chats: List<Chat>) {
+        hasReceivedPhoneSync = true
         syncedChats.clear()
         chats.forEach { chat ->
             syncedChats[chat.id] = chat.copy(
@@ -213,6 +203,26 @@ object WearFakeChatRepository {
             syncedChats[chatId] = chat.copy(unreadCount = 0)
         }
         notifyChanged()
+    }
+
+    private fun getDemoChats(): List<Chat> {
+        return listOf(
+            buildChat(
+                id = "wear_chat_001",
+                title = "小明",
+                participantIds = listOf("me", "user_001"),
+            ),
+            buildChat(
+                id = "wear_chat_002",
+                title = "阿强",
+                participantIds = listOf("me", "user_002"),
+            ),
+            buildChat(
+                id = "wear_chat_003",
+                title = "家人",
+                participantIds = listOf("me", "user_003"),
+            ),
+        )
     }
 
     private fun buildChat(
