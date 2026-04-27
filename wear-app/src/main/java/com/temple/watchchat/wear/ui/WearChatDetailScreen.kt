@@ -37,7 +37,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
+import com.temple.watchchat.shared.sync.WearSyncEvent
 import com.temple.watchchat.wear.data.WearFakeChatRepository
+import com.temple.watchchat.wear.sync.WearSyncClient
 import com.temple.watchchat.wear.util.WearVibration
 import java.util.Locale
 
@@ -54,14 +56,39 @@ fun WearChatDetailScreen(
     }
     var statusText by remember(chat.id) { mutableStateOf("消息") }
 
-    fun sendQuickReply(text: String) {
+    fun sendQuickReply(
+        text: String,
+        isVoiceReply: Boolean = false,
+    ) {
         val message = WearFakeChatRepository.sendQuickReply(
             chatId = chat.id,
             content = text,
         )
         messages.add(message)
-        statusText = "已回复：$text"
+        statusText = if (isVoiceReply) {
+            "语音已发送：$text"
+        } else {
+            "已回复：$text"
+        }
         WearVibration.success(context)
+
+        if (isVoiceReply) {
+            WearSyncClient.sendVoiceTextReplyRequested(
+                context = context,
+                event = WearSyncEvent.VoiceTextReplyRequested(
+                    chatId = chat.id,
+                    transcribedText = text,
+                ),
+            )
+        } else {
+            WearSyncClient.sendQuickReplyRequested(
+                context = context,
+                event = WearSyncEvent.QuickReplyRequested(
+                    chatId = chat.id,
+                    content = text,
+                ),
+            )
+        }
     }
 
     val voiceInputLauncher = rememberLauncherForActivityResult(
@@ -77,7 +104,10 @@ fun WearChatDetailScreen(
                 statusText = "未识别到语音"
                 WearVibration.error(context)
             } else {
-                sendQuickReply(spokenText)
+                sendQuickReply(
+                    text = spokenText,
+                    isVoiceReply = true,
+                )
             }
         } else {
             statusText = "已取消语音输入"
