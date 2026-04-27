@@ -16,27 +16,44 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.wear.data.WearFakeChatRepository
+import com.temple.watchchat.wear.util.WearVibration
 
 @Composable
 fun WearChatListScreen(
     onChatClick: (Chat) -> Unit,
 ) {
-    val chats = WearFakeChatRepository.getRecentChats()
+    val context = LocalContext.current
+    var chats by remember { mutableStateOf(WearFakeChatRepository.getRecentChats()) }
+    var statusText by remember { mutableStateOf("最近聊天") }
+
+    fun simulateIncomingMessage() {
+        val targetChat = chats.firstOrNull() ?: return
+        WearFakeChatRepository.simulateIncomingMessage(targetChat.id)
+        chats = WearFakeChatRepository.getRecentChats()
+        statusText = "收到新消息"
+        WearVibration.incomingMessage(context)
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -55,13 +72,24 @@ fun WearChatListScreen(
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = "最近聊天",
+                text = statusText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
 
-            Spacer(modifier = Modifier.size(8.dp))
+            Spacer(modifier = Modifier.size(6.dp))
+
+            Button(
+                onClick = { simulateIncomingMessage() },
+            ) {
+                Text(
+                    text = "模拟新消息",
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+
+            Spacer(modifier = Modifier.size(6.dp))
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -70,7 +98,11 @@ fun WearChatListScreen(
                 items(chats) { chat ->
                     WearChatListItem(
                         chat = chat,
-                        onClick = { onChatClick(chat) },
+                        onClick = {
+                            WearFakeChatRepository.markChatRead(chat.id)
+                            chats = WearFakeChatRepository.getRecentChats()
+                            onChatClick(chat.copy(unreadCount = 0))
+                        },
                     )
                 }
             }
