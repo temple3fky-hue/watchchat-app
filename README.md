@@ -1,5 +1,7 @@
 # WatchChat / 腕聊
 
+[![Android Debug Build](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml/badge.svg)](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml)
+
 WatchChat 是一个面向 Android 手机和 Wear OS 手表的简易聊天 App。
 
 第一版目标：手机端完成账号登录、聊天列表、文字聊天；手表端完成最近聊天、消息查看、快捷回复、语音输入转文字和震动提醒。
@@ -165,6 +167,38 @@ SUPABASE_ANON_KEY=your-anon-public-key
 
 注意：不要把 `service_role` key 放进 Android App。
 
+## GitHub Actions 自动打包
+
+仓库已添加 Debug APK 自动构建工作流：
+
+```text
+.github/workflows/android-debug-build.yml
+```
+
+触发方式：
+
+```text
+push 到 main
+pull request 到 main
+手动 workflow_dispatch
+```
+
+工作流会构建：
+
+```text
+:mobile-app:assembleDebug
+:wear-app:assembleDebug
+```
+
+构建成功后会上传两个产物：
+
+```text
+mobile-app-debug-apk
+wear-app-debug-apk
+```
+
+当前仓库暂未提交 Gradle Wrapper，因此 CI 使用 `gradle/actions/setup-gradle` 安装 Gradle 8.10.2 后运行构建。
+
 ## 当前开发状态
 
 当前项目已经从“项目骨架”推进到：
@@ -173,6 +207,7 @@ SUPABASE_ANON_KEY=your-anon-public-key
 手机端：可登录 / 注册 / 新建聊天 / 发送文字消息
 手表端：可查看聊天 / 快捷回复 / 语音输入 / 震动提醒
 后端：Supabase 表结构和基础仓库代码已搭建
+CI：已添加 Debug APK 自动构建工作流
 ```
 
 仍有部分功能是开发版实现：
@@ -180,16 +215,18 @@ SUPABASE_ANON_KEY=your-anon-public-key
 - 手机端消息同步目前是 3 秒轮询，不是真正 Realtime channel
 - 手表端数据目前是本地假数据，尚未和手机端或 Supabase 同步
 - 语音消息目前是语音转文字回复，尚未做音频录制、上传和播放
+- 仓库暂未提交 Gradle Wrapper，后续建议补齐 `gradlew` 和 `gradle/wrapper`
 
 ## 下一步计划
 
-1. 把手机端 3 秒轮询替换成 Supabase Realtime channel
-2. 手表端接入手机端同步数据
-3. 增加真正的语音消息录制
-4. 上传语音文件到 Supabase Storage
-5. 聊天详情页支持播放语音消息
-6. 优化聊天列表刷新和错误提示
-7. 增加基础测试和 GitHub Actions 打包检查
+1. 补齐 Gradle Wrapper，让本地和 CI 使用同一套 Gradle 版本
+2. 把手机端 3 秒轮询替换成 Supabase Realtime channel
+3. 手表端接入手机端同步数据
+4. 增加真正的语音消息录制
+5. 上传语音文件到 Supabase Storage
+6. 聊天详情页支持播放语音消息
+7. 优化聊天列表刷新和错误提示
+8. 增加基础测试和构建检查
 
 ## 暂不包含
 
