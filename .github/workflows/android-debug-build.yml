@@ -27,10 +27,8 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Set up Gradle
+      - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: 8.10.2
 
       - name: Create empty local.properties for CI
         run: |
@@ -39,8 +37,11 @@ jobs:
           SUPABASE_ANON_KEY=
           EOF
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       - name: Build debug APKs
-        run: gradle :mobile-app:assembleDebug :wear-app:assembleDebug --stacktrace
+        run: ./gradlew :mobile-app:assembleDebug :wear-app:assembleDebug --stacktrace
 
       - name: Upload mobile debug APK
         uses: actions/upload-artifact@v4
