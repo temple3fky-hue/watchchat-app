@@ -1,6 +1,7 @@
 package com.temple.watchchat.mobile.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import com.temple.watchchat.shared.model.Chat
 
 @Composable
-fun ChatListScreen() {
+fun ChatListScreen(
+    onChatClick: (Chat) -> Unit,
+) {
     val chats = sampleChats()
 
     Surface(
@@ -58,7 +61,10 @@ fun ChatListScreen() {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(chats) { chat ->
-                    ChatListItem(chat = chat)
+                    ChatListItem(
+                        chat = chat,
+                        onClick = { onChatClick(chat) },
+                    )
                 }
             }
         }
@@ -66,9 +72,14 @@ fun ChatListScreen() {
 }
 
 @Composable
-private fun ChatListItem(chat: Chat) {
+private fun ChatListItem(
+    chat: Chat,
+    onClick: () -> Unit,
+) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Row(
