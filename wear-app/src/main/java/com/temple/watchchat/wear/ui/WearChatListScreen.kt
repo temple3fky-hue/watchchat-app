@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.item
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,17 +51,24 @@ fun WearChatListScreen(
     val context = LocalContext.current
     val changeVersion by WearFakeChatRepository.changeVersion.collectAsState()
     var chats by remember { mutableStateOf(WearFakeChatRepository.getRecentChats()) }
-    var statusText by remember { mutableStateOf("最近聊天") }
+    var statusText by remember { mutableStateOf("正在同步手机聊天...") }
+
+    fun requestPhoneSync() {
+        statusText = "正在同步手机聊天..."
+        WearSyncClient.sendChatListSyncRequested(context)
+    }
+
+    LaunchedEffect(Unit) {
+        requestPhoneSync()
+    }
 
     LaunchedEffect(changeVersion) {
         chats = WearFakeChatRepository.getRecentChats()
-    }
-
-    fun simulateIncomingMessage() {
-        val targetChat = chats.firstOrNull() ?: return
-        WearFakeChatRepository.simulateIncomingMessage(targetChat.id)
-        statusText = "收到新消息"
-        WearVibration.incomingMessage(context)
+        statusText = if (chats.isEmpty()) {
+            "暂无同步聊天"
+        } else {
+            "最近聊天"
+        }
     }
 
     fun openChat(chat: Chat) {
@@ -102,11 +110,9 @@ fun WearChatListScreen(
 
             Spacer(modifier = Modifier.size(6.dp))
 
-            Button(
-                onClick = { simulateIncomingMessage() },
-            ) {
+            Button(onClick = { requestPhoneSync() }) {
                 Text(
-                    text = "模拟新消息",
+                    text = "同步手机聊天",
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
@@ -117,14 +123,28 @@ fun WearChatListScreen(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(
-                    items = chats,
-                    key = { chat -> chat.id },
-                ) { chat ->
-                    WearChatListItem(
-                        chat = chat,
-                        onClick = { openChat(chat) },
-                    )
+                if (chats.isEmpty()) {
+                    item {
+                        Text(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            text = "没有收到手机聊天。请确认手机端 WatchChat 已登录、手机和手表已配对并保持连接，然后点上方同步。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    items(
+                        items = chats,
+                        key = { chat -> chat.id },
+                    ) { chat ->
+                        WearChatListItem(
+                            chat = chat,
+                            onClick = { openChat(chat) },
+                        )
+                    }
                 }
             }
         }
