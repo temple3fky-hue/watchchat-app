@@ -6,6 +6,8 @@ import com.temple.watchchat.shared.model.Message
 interface ChatRepository {
     suspend fun getChats(): List<Chat>
 
+    suspend fun createChat(title: String): Chat
+
     suspend fun getMessages(chatId: String): List<Message>
 
     suspend fun sendTextMessage(
@@ -27,6 +29,20 @@ object ChatRepositoryProvider {
 private object LocalChatRepository : ChatRepository {
     override suspend fun getChats(): List<Chat> {
         return FakeChatRepository.getChats()
+    }
+
+    override suspend fun createChat(title: String): Chat {
+        val now = System.currentTimeMillis()
+        val cleanTitle = title.trim().ifBlank { "新的聊天" }
+
+        return Chat(
+            id = "local_chat_$now",
+            title = cleanTitle,
+            participantIds = listOf("me"),
+            lastMessagePreview = "本地新建聊天",
+            updatedAtMillis = now,
+            unreadCount = 0,
+        )
     }
 
     override suspend fun getMessages(chatId: String): List<Message> {
