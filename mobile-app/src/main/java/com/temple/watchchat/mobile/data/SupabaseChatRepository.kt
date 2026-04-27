@@ -15,9 +15,8 @@ import kotlinx.serialization.Serializable
 
 object SupabaseChatRepository : ChatRepository {
     override suspend fun getChats(): List<Chat> {
-        val client = SupabaseClientProvider.client ?: return FakeChatRepository.getChats()
-        val currentUserId = client.auth.currentSessionOrNull()?.user?.id
-            ?: return FakeChatRepository.getChats()
+        val client = SupabaseClientProvider.client ?: return emptyList()
+        val currentUserId = client.auth.currentSessionOrNull()?.user?.id ?: return emptyList()
 
         return runCatching {
             val myMemberships = client.from("chat_members")
@@ -77,7 +76,7 @@ object SupabaseChatRepository : ChatRepository {
                     )
                 }
         }.getOrElse {
-            FakeChatRepository.getChats()
+            emptyList()
         }
     }
 
@@ -85,9 +84,10 @@ object SupabaseChatRepository : ChatRepository {
         title: String,
         otherUserEmail: String,
     ): Chat {
-        val client = SupabaseClientProvider.client ?: return createLocalFallbackChat(title, otherUserEmail)
+        val client = SupabaseClientProvider.client
+            ?: return failedChat(title, "Supabase 未配置")
         val currentUserId = client.auth.currentSessionOrNull()?.user?.id
-            ?: return createLocalFallbackChat(title, otherUserEmail)
+            ?: return failedChat(title, "请先登录")
         val cleanTitle = title.trim().ifBlank { "新的聊天" }
         val cleanEmail = otherUserEmail.trim()
 
@@ -146,14 +146,15 @@ object SupabaseChatRepository : ChatRepository {
                     else -> "已添加：${otherProfile.displayName.ifBlank { otherProfile.email }}"
                 },
                 unreadCount = 0,
+                updatedAtMillis = System.currentTimeMillis(),
             )
-        }.getOrElse {
-            createLocalFallbackChat(cleanTitle, cleanEmail)
+        }.getOrElse { error ->
+            failedChat(cleanTitle, error.message ?: "创建失败")
         }
     }
 
     override suspend fun getMessages(chatId: String): List<Message> {
-        val client = SupabaseClientProvider.client ?: return FakeChatRepository.getMessages(chatId)
+        val client = SupabaseClientProvider.client ?: return emptyList()
 
         return runCatching {
             client.from("messages")
@@ -163,7 +164,7 @@ object SupabaseChatRepository : ChatRepository {
                 .sortedBy { it.createdAt ?: "" }
                 .map { it.toMessage() }
         }.getOrElse {
-            FakeChatRepository.getMessages(chatId)
+            emptyList()
         }
     }
 
@@ -180,18 +181,19 @@ object SupabaseChatRepository : ChatRepository {
         chatId: String,
         content: String,
     ): Message {
-        val client = SupabaseClientProvider.client ?: return FakeChatRepository.createLocalTextMessage(chatId, content)
+        val client = SupabaseClientProvider.client
+            ?: return failedMessage(chatId, content)
         val currentUserId = client.auth.currentSessionOrNull()?.user?.id
-            ?: return FakeChatRepository.createLocalTextMessage(chatId, content)
+            ?: return failedMessage(chatId, content)
 
         return runCatching {
-            val newMessage = MessageInsertDto(
-                chatId = chatId,
-                senderId = currentUserId,
-                content = content,
+            client.from("messages").insert(
+                MessageInsertDto(
+                    chatId = chatId,
+                    senderId = currentUserId,
+                    content = content,
+                ),
             )
-
-            client.from("messages").insert(newMessage)
 
             Message(
                 id = "local_${System.currentTimeMillis()}",
@@ -203,7 +205,7 @@ object SupabaseChatRepository : ChatRepository {
                 createdAtMillis = System.currentTimeMillis(),
             )
         }.getOrElse {
-            FakeChatRepository.createLocalTextMessage(chatId, content)
+            failedMessage(chatId, content)
         }
     }
 
@@ -224,31 +226,33 @@ object SupabaseChatRepository : ChatRepository {
         }
     }
 
-    private fun createLocalFallbackChat(
+    private fun failedChat(
         title: String,
-        otherUserEmail: String,
+        reason: String,
     ): Chat {
         val now = System.currentTimeMillis()
-        val cleanTitle = title.trim().ifBlank { "新的聊天" }
-        val cleanEmail = otherUserEmail.trim()
-        val participants = buildList {
-            add("me")
-            if (cleanEmail.isNotEmpty()) {
-                add(cleanEmail)
-            }
-        }
-
         return Chat(
-            id = "local_chat_$now",
-            title = cleanTitle,
-            participantIds = participants,
-            lastMessagePreview = if (cleanEmail.isNotEmpty()) {
-                "已添加：$cleanEmail"
-            } else {
-                "本地新建聊天"
-            },
+            id = "failed_chat_$now",
+            title = title.trim().ifBlank { "创建失败" },
+            participantIds = emptyList(),
+            lastMessagePreview = "创建失败：$reason",
             updatedAtMillis = now,
             unreadCount = 0,
+        )
+    }
+
+    private fun failedMessage(
+        chatId: String,
+        content: String,
+    ): Message {
+        return Message(
+            id = "failed_message_${System.currentTimeMillis()}",
+            chatId = chatId,
+            senderId = "me",
+            content = content,
+            type = MessageType.TEXT,
+            status = MessageStatus.FAILED,
+            createdAtMillis = System.currentTimeMillis(),
         )
     }
 }
