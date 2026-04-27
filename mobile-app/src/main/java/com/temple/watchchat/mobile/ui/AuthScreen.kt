@@ -39,6 +39,7 @@ fun AuthScreen(
     var password by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var authMessage by remember { mutableStateOf<String?>(null) }
+    var isErrorMessage by remember { mutableStateOf(false) }
 
     val canSubmit = !isLoading &&
         email.trim().isNotEmpty() &&
@@ -50,6 +51,7 @@ fun AuthScreen(
 
         isLoading = true
         authMessage = null
+        isErrorMessage = false
 
         scope.launch {
             val result = if (isRegisterMode) {
@@ -74,11 +76,20 @@ fun AuthScreen(
                     } else {
                         null
                     }
+                    isErrorMessage = false
                     onAuthSuccess()
+                }
+
+                is AuthResult.NeedsEmailConfirmation -> {
+                    authMessage = result.message
+                    isErrorMessage = false
+                    isRegisterMode = false
+                    password = ""
                 }
 
                 is AuthResult.Error -> {
                     authMessage = result.message
+                    isErrorMessage = true
                 }
             }
         }
@@ -162,6 +173,7 @@ fun AuthScreen(
                 onClick = {
                     isRegisterMode = !isRegisterMode
                     authMessage = null
+                    isErrorMessage = false
                 },
             ) {
                 Text(
@@ -178,10 +190,10 @@ fun AuthScreen(
             Text(
                 text = authMessage ?: "配置 Supabase 后会使用真实 Auth；未配置时走本地假登录。",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (authMessage == null) {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                } else {
-                    MaterialTheme.colorScheme.error
+                color = when {
+                    authMessage == null -> MaterialTheme.colorScheme.onSurfaceVariant
+                    isErrorMessage -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.primary
                 },
             )
         }
