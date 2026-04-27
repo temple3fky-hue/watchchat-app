@@ -35,13 +35,26 @@ object SupabaseChatRepository : ChatRepository {
         }
     }
 
-    override suspend fun createChat(title: String): Chat {
-        val client = SupabaseClientProvider.client ?: return createLocalFallbackChat(title)
+    override suspend fun createChat(
+        title: String,
+        otherUserEmail: String,
+    ): Chat {
+        val client = SupabaseClientProvider.client ?: return createLocalFallbackChat(title, otherUserEmail)
         val currentUserId = client.auth.currentSessionOrNull()?.user?.id
-            ?: return createLocalFallbackChat(title)
+            ?: return createLocalFallbackChat(title, otherUserEmail)
         val cleanTitle = title.trim().ifBlank { "新的聊天" }
+        val cleanEmail = otherUserEmail.trim()
 
         return runCatching {
+            val otherProfile = if (cleanEmail.isNotEmpty()) {
+                client.from("profiles")
+                    .select()
+                    .decodeList<ProfileDto>()
+                    .firstOrNull { it.email.equals(cleanEmail, ignoreCase = true) }
+            } else {
+                null
+            }
+
             val createdChat = client.from("chats")
                 .insert(
                     ChatInsertDto(
@@ -60,15 +73,36 @@ object SupabaseChatRepository : ChatRepository {
                 ),
             )
 
+            if (otherProfile != null && otherProfile.id != currentUserId) {
+                client.from("chat_members").insert(
+                    ChatMemberInsertDto(
+                        chatId = createdChat.id,
+                        userId = otherProfile.id,
+                    ),
+                )
+            }
+
+            val participants = buildList {
+                add(currentUserId)
+                if (otherProfile != null && otherProfile.id != currentUserId) {
+                    add(otherProfile.id)
+                }
+            }
+
             Chat(
                 id = createdChat.id,
                 title = createdChat.title.ifBlank { cleanTitle },
-                participantIds = listOf(currentUserId),
-                lastMessagePreview = "新建聊天成功",
+                participantIds = participants,
+                lastMessagePreview = when {
+                    cleanEmail.isBlank() -> "新建聊天成功"
+                    otherProfile == null -> "未找到该邮箱，已创建单人聊天"
+                    otherProfile.id == currentUserId -> "这是你自己的邮箱，已创建单人聊天"
+                    else -> "已添加：${otherProfile.displayName.ifBlank { otherProfile.email }}"
+                },
                 unreadCount = 0,
             )
         }.getOrElse {
-            createLocalFallbackChat(cleanTitle)
+            createLocalFallbackChat(cleanTitle, cleanEmail)
         }
     }
 
@@ -118,19 +152,42 @@ object SupabaseChatRepository : ChatRepository {
         }
     }
 
-    private fun createLocalFallbackChat(title: String): Chat {
+    private fun createLocalFallbackChat(
+        title: String,
+        otherUserEmail: String,
+    ): Chat {
         val now = System.currentTimeMillis()
         val cleanTitle = title.trim().ifBlank { "新的聊天" }
+        val cleanEmail = otherUserEmail.trim()
+        val participants = buildList {
+            add("me")
+            if (cleanEmail.isNotEmpty()) {
+                add(cleanEmail)
+            }
+        }
+
         return Chat(
             id = "local_chat_$now",
             title = cleanTitle,
-            participantIds = listOf("me"),
-            lastMessagePreview = "本地新建聊天",
+            participantIds = participants,
+            lastMessagePreview = if (cleanEmail.isNotEmpty()) {
+                "已添加：$cleanEmail"
+            } else {
+                "本地新建聊天"
+            },
             updatedAtMillis = now,
             unreadCount = 0,
         )
     }
 }
+
+@Serializable
+private data class ProfileDto(
+    val id: String,
+    val email: String,
+    @SerialName("display_name")
+    val displayName: String = "",
+)
 
 @Serializable
 private data class ChatDto(
