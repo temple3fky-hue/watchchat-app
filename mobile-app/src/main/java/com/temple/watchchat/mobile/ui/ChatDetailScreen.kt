@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.temple.watchchat.mobile.data.FakeChatRepository
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
 import com.temple.watchchat.shared.model.MessageStatus
@@ -38,7 +39,7 @@ fun ChatDetailScreen(
     chat: Chat,
     onBack: () -> Unit,
 ) {
-    val messages = remember(chat.id) { sampleMessages(chat.id).toMutableStateList() }
+    val messages = remember(chat.id) { FakeChatRepository.getMessages(chat.id).toMutableStateList() }
     var inputText by remember(chat.id) { mutableStateOf("") }
 
     fun sendMessage() {
@@ -46,13 +47,9 @@ fun ChatDetailScreen(
         if (content.isEmpty()) return
 
         messages.add(
-            Message(
-                id = "local_${System.currentTimeMillis()}",
+            FakeChatRepository.createLocalTextMessage(
                 chatId = chat.id,
-                senderId = "me",
                 content = content,
-                status = MessageStatus.SENT,
-                createdAtMillis = System.currentTimeMillis(),
             ),
         )
         inputText = ""
@@ -170,67 +167,5 @@ private fun MessageBubble(message: Message) {
                 }
             }
         }
-    }
-}
-
-private fun sampleMessages(chatId: String): List<Message> {
-    return when (chatId) {
-        "chat_001" -> listOf(
-            Message(
-                id = "msg_001",
-                chatId = chatId,
-                senderId = "user_001",
-                content = "你今天几点下班？",
-                status = MessageStatus.READ,
-            ),
-            Message(
-                id = "msg_002",
-                chatId = chatId,
-                senderId = "me",
-                content = "大概 6 点半。",
-                status = MessageStatus.READ,
-            ),
-            Message(
-                id = "msg_003",
-                chatId = chatId,
-                senderId = "user_001",
-                content = "晚上一起吃饭吗？",
-                status = MessageStatus.READ,
-            ),
-        )
-
-        "chat_002" -> listOf(
-            Message(
-                id = "msg_004",
-                chatId = chatId,
-                senderId = "user_002",
-                content = "工具我已经放车上了。",
-                status = MessageStatus.READ,
-            ),
-            Message(
-                id = "msg_005",
-                chatId = chatId,
-                senderId = "me",
-                content = "收到，我马上过去。",
-                status = MessageStatus.SENT,
-            ),
-        )
-
-        else -> listOf(
-            Message(
-                id = "msg_006",
-                chatId = chatId,
-                senderId = "user_003",
-                content = "路上注意安全。",
-                status = MessageStatus.READ,
-            ),
-            Message(
-                id = "msg_007",
-                chatId = chatId,
-                senderId = "me",
-                content = "好的，到了告诉你。",
-                status = MessageStatus.SENT,
-            ),
-        )
     }
 }
