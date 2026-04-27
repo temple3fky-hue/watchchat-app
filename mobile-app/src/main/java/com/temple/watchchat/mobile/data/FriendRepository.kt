@@ -84,7 +84,7 @@ private object SupabaseFriendRepository : FriendRepository {
 
             client.from("profiles")
                 .select()
-                .decodeList<ProfileDto>()
+                .decodeList<FriendProfileDto>()
                 .filter { profile -> profile.id in friendIds }
                 .map { profile ->
                     FriendUser(
@@ -116,7 +116,7 @@ private object SupabaseFriendRepository : FriendRepository {
             val requesterIds = requests.map { request -> request.requesterId }.toSet()
             val profilesById = client.from("profiles")
                 .select()
-                .decodeList<ProfileDto>()
+                .decodeList<FriendProfileDto>()
                 .filter { profile -> profile.id in requesterIds }
                 .associateBy { profile -> profile.id }
 
@@ -147,7 +147,7 @@ private object SupabaseFriendRepository : FriendRepository {
         return runCatching {
             val targetProfile = client.from("profiles")
                 .select()
-                .decodeList<ProfileDto>()
+                .decodeList<FriendProfileDto>()
                 .firstOrNull { profile -> profile.email.equals(cleanEmail, ignoreCase = true) }
                 ?: return@runCatching FriendActionResult(false, "没有找到这个邮箱")
 
@@ -260,7 +260,7 @@ private object LocalFriendRepository : FriendRepository {
 }
 
 @Serializable
-private data class ProfileDto(
+private data class FriendProfileDto(
     val id: String,
     val email: String,
     @SerialName("display_name")
