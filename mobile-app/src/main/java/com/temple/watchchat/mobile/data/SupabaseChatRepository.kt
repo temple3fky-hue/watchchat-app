@@ -6,6 +6,7 @@ import com.temple.watchchat.shared.model.MessageStatus
 import com.temple.watchchat.shared.model.MessageType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import java.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -206,6 +207,23 @@ object SupabaseChatRepository : ChatRepository {
         }
     }
 
+    override suspend fun markChatRead(chatId: String) {
+        val client = SupabaseClientProvider.client ?: return
+
+        runCatching {
+            client.from("messages").update(
+                MessageReadUpdateDto(
+                    status = "read",
+                    readAt = Instant.now().toString(),
+                ),
+            ) {
+                filter {
+                    eq("chat_id", chatId)
+                }
+            }
+        }
+    }
+
     private fun createLocalFallbackChat(
         title: String,
         otherUserEmail: String,
@@ -327,4 +345,11 @@ private data class MessageInsertDto(
     @SerialName("message_type")
     val messageType: String = "text",
     val status: String = "sent",
+)
+
+@Serializable
+private data class MessageReadUpdateDto(
+    val status: String,
+    @SerialName("read_at")
+    val readAt: String,
 )
