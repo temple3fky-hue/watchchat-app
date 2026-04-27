@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.temple.watchchat.mobile.data.AuthRepository
 import com.temple.watchchat.mobile.data.ChatRepositoryProvider
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
@@ -48,6 +49,7 @@ fun ChatDetailScreen(
     var isLoading by remember(chat.id) { mutableStateOf(true) }
     var isSending by remember(chat.id) { mutableStateOf(false) }
     var refreshText by remember(chat.id) { mutableStateOf("聊天详情") }
+    var currentUserId by remember { mutableStateOf("me") }
 
     suspend fun reloadMessages(showRefreshing: Boolean = false) {
         if (showRefreshing) {
@@ -61,6 +63,7 @@ fun ChatDetailScreen(
     }
 
     LaunchedEffect(chat.id) {
+        currentUserId = AuthRepository.currentUserId() ?: "me"
         isLoading = true
         reloadMessages()
     }
@@ -126,7 +129,10 @@ fun ChatDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(messages) { message ->
-                    MessageBubble(message = message)
+                    MessageBubble(
+                        message = message,
+                        currentUserId = currentUserId,
+                    )
                 }
             }
 
@@ -157,8 +163,13 @@ fun ChatDetailScreen(
 }
 
 @Composable
-private fun MessageBubble(message: Message) {
-    val isMine = message.senderId == "me" || message.senderId.startsWith("local_")
+private fun MessageBubble(
+    message: Message,
+    currentUserId: String,
+) {
+    val isMine = message.senderId == currentUserId ||
+        message.senderId == "me" ||
+        message.senderId.startsWith("local_")
     val rowArrangement = if (isMine) Arrangement.End else Arrangement.Start
     val bubbleColor = if (isMine) {
         MaterialTheme.colorScheme.primaryContainer
