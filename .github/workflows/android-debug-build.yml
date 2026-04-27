@@ -30,28 +30,25 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Create production local.properties for CI
+      - name: Validate production build config
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "Missing GitHub Actions secrets: SUPABASE_URL and/or SUPABASE_ANON_KEY"
-            echo "Add them in GitHub: Settings > Secrets and variables > Actions > New repository secret"
+            echo "Missing GitHub Actions repository secrets."
+            echo "Required names: SUPABASE_URL and SUPABASE_ANON_KEY"
             exit 1
           fi
-
-          cat > local.properties <<EOF
-          SUPABASE_URL=$SUPABASE_URL
-          SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
-          WATCHCHAT_ALLOW_DEMO_MODE=false
-          EOF
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
       - name: Build debug APKs
-        run: ./gradlew :mobile-app:assembleDebug :wear-app:assembleDebug --stacktrace
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: ./gradlew :mobile-app:assembleDebug :wear-app:assembleDebug --stacktrace -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" -PWATCHCHAT_ALLOW_DEMO_MODE=false
 
       - name: Upload mobile debug APK
         uses: actions/upload-artifact@v4
