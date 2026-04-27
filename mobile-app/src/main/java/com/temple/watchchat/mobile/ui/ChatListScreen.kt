@@ -19,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,19 +37,40 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.temple.watchchat.mobile.data.ChatRepositoryProvider
 import com.temple.watchchat.shared.model.Chat
+import kotlinx.coroutines.launch
 
 @Composable
 fun ChatListScreen(
     onChatClick: (Chat) -> Unit,
     onSignOutClick: () -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
     var chats by remember { mutableStateOf<List<Chat>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isCreating by remember { mutableStateOf(false) }
+    var newChatTitle by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) {
+    suspend fun reloadChats() {
         isLoading = true
         chats = ChatRepositoryProvider.current().getChats()
         isLoading = false
+    }
+
+    fun createChat() {
+        val title = newChatTitle.trim().ifBlank { "新的聊天" }
+        if (isCreating) return
+
+        isCreating = true
+        scope.launch {
+            val newChat = ChatRepositoryProvider.current().createChat(title)
+            chats = listOf(newChat) + chats
+            newChatTitle = ""
+            isCreating = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        reloadChats()
     }
 
     Surface(
@@ -83,9 +106,32 @@ fun ChatListScreen(
 
             Spacer(modifier = Modifier.size(16.dp))
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    modifier = Modifier.weight(1f),
+                    value = newChatTitle,
+                    onValueChange = { newChatTitle = it },
+                    label = { Text(text = "新聊天名称") },
+                    singleLine = true,
+                    enabled = !isCreating,
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Button(
+                    onClick = { createChat() },
+                    enabled = !isCreating,
+                ) {
+                    Text(text = if (isCreating) "创建中" else "新建")
+                }
+            }
+
+            Spacer(modifier = Modifier.size(16.dp))
+
             if (!isLoading && chats.isEmpty()) {
                 Text(
-                    text = "暂无聊天。后续会增加创建聊天功能。",
+                    text = "暂无聊天。输入名称后点击新建。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
