@@ -3,17 +3,24 @@ package com.temple.watchchat.mobile.sync
 import android.util.Log
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.WearableListenerService
+import com.temple.watchchat.mobile.data.ChatRepositoryProvider
 import com.temple.watchchat.shared.sync.WearSyncEvent
 import com.temple.watchchat.shared.sync.WearSyncJson
 import com.temple.watchchat.shared.sync.WearSyncPaths
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 /**
- * 手机端 Wear Data Layer 同步服务骨架。
+ * 手机端 Wear Data Layer 同步服务。
  *
  * 负责接收手表端发来的快捷回复、语音转文字回复、标记已读等请求。
- * 后续会在这里调用 ChatRepository，把手表请求真正写入手机端 / Supabase。
  */
 class MobileWearSyncService : WearableListenerService() {
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override fun onMessageReceived(messageEvent: MessageEvent) {
         super.onMessageReceived(messageEvent)
 
@@ -32,22 +39,81 @@ class MobileWearSyncService : WearableListenerService() {
         }
     }
 
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
+    }
+
     private fun handleQuickReply(event: WearSyncEvent) {
         val request = event as? WearSyncEvent.QuickReplyRequested ?: return
-        Log.d(TAG, "Quick reply requested: chatId=${request.chatId}, content=${request.content}")
-        // TODO: 调用 ChatRepositoryProvider.current().sendTextMessage(request.chatId, request.content)
+        sendTextFromWear(
+            chatId = request.chatId,
+            content = request.content,
+            source = "quick_reply",
+        )
     }
 
     private fun handleVoiceTextReply(event: WearSyncEvent) {
         val request = event as? WearSyncEvent.VoiceTextReplyRequested ?: return
-        Log.d(TAG, "Voice text reply requested: chatId=${request.chatId}, text=${request.transcribedText}")
-        // TODO: 调用 ChatRepositoryProvider.current().sendTextMessage(request.chatId, request.transcribedText)
+        sendTextFromWear(
+            chatId = request.chatId,
+            content = request.transcribedText,
+            source = "voice_text_reply",
+        )
     }
 
     private fun handleMarkChatRead(event: WearSyncEvent) {
         val request = event as? WearSyncEvent.MarkChatReadRequested ?: return
         Log.d(TAG, "Mark chat read requested: chatId=${request.chatId}")
-        // TODO: 后续接入已读状态更新。
+        // TODO: 后续接入 messages.read_at / unread_count 后，在这里写入已读状态。
+    }
+
+    private fun sendTextFromWear(
+        chatId: String,
+        content: String,
+        source: String,
+    ) {
+        val cleanContent = content.trim()
+        if (cleanContent.isEmpty()) {
+            Log.d(TAG, "Ignore empty wear reply: source=$source, chatId=$chatId")
+            return
+        }
+
+        serviceScope.launch {
+            runCatching {
+                val sentMessage = ChatRepositoryProvider.current().sendTextMessage(
+                    chatId = chatId,
+                    content = cleanContent,
+                )
+
+                MobileWearSyncClient.sendNewMessageReceived(
+                    context = this@MobileWearSyncService,
+                    event = WearSyncEvent.NewMessageReceived(
+                        chatId = chatId,
+                        message = sentMessage,
+                    ),
+                )
+
+                val latestMessages = ChatRepositoryProvider.current().getMessages(chatId)
+                MobileWearSyncClient.sendChatMessagesUpdated(
+                    context = this@MobileWearSyncService,
+                    event = WearSyncEvent.ChatMessagesUpdated(
+                        chatId = chatId,
+                        messages = latestMessages,
+                    ),
+                )
+
+                val latestChats = ChatRepositoryProvider.current().getChats()
+                MobileWearSyncClient.sendChatListUpdated(
+                    context = this@MobileWearSyncService,
+                    event = WearSyncEvent.ChatListUpdated(chats = latestChats),
+                )
+            }.onSuccess {
+                Log.d(TAG, "Wear reply handled: source=$source, chatId=$chatId")
+            }.onFailure { error ->
+                Log.w(TAG, "Failed to handle wear reply: ${error.message}")
+            }
+        }
     }
 
     private companion object {
