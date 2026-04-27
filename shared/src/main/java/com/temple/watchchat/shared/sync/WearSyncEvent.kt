@@ -6,12 +6,17 @@ import kotlinx.serialization.Serializable
 
 /**
  * 手机端和手表端之间同步用的事件。
- *
- * 第一版先定义统一消息格式，后续可以通过 Wear Data Layer、蓝牙同步，
- * 或者 Supabase 拉取后再转发给手表端。
  */
 @Serializable
 sealed class WearSyncEvent {
+    @Serializable
+    data object ChatListSyncRequested : WearSyncEvent()
+
+    @Serializable
+    data class ChatMessagesSyncRequested(
+        val chatId: String,
+    ) : WearSyncEvent()
+
     @Serializable
     data class ChatListUpdated(
         val chats: List<Chat>,
