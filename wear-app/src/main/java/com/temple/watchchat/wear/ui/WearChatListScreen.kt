@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.item
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +41,6 @@ import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.sync.WearSyncEvent
 import com.temple.watchchat.wear.data.WearFakeChatRepository
 import com.temple.watchchat.wear.sync.WearSyncClient
-import com.temple.watchchat.wear.util.WearVibration
 
 @Composable
 fun WearChatListScreen(
