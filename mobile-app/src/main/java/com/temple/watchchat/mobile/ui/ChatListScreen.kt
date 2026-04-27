@@ -49,6 +49,7 @@ fun ChatListScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isCreating by remember { mutableStateOf(false) }
     var newChatTitle by remember { mutableStateOf("") }
+    var otherUserEmail by remember { mutableStateOf("") }
 
     suspend fun reloadChats() {
         isLoading = true
@@ -58,13 +59,18 @@ fun ChatListScreen(
 
     fun createChat() {
         val title = newChatTitle.trim().ifBlank { "新的聊天" }
+        val email = otherUserEmail.trim()
         if (isCreating) return
 
         isCreating = true
         scope.launch {
-            val newChat = ChatRepositoryProvider.current().createChat(title)
+            val newChat = ChatRepositoryProvider.current().createChat(
+                title = title,
+                otherUserEmail = email,
+            )
             chats = listOf(newChat) + chats
             newChatTitle = ""
+            otherUserEmail = ""
             isCreating = false
         }
     }
@@ -106,15 +112,26 @@ fun ChatListScreen(
 
             Spacer(modifier = Modifier.size(16.dp))
 
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = newChatTitle,
+                onValueChange = { newChatTitle = it },
+                label = { Text(text = "新聊天名称") },
+                singleLine = true,
+                enabled = !isCreating,
+            )
+
+            Spacer(modifier = Modifier.size(8.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 OutlinedTextField(
                     modifier = Modifier.weight(1f),
-                    value = newChatTitle,
-                    onValueChange = { newChatTitle = it },
-                    label = { Text(text = "新聊天名称") },
+                    value = otherUserEmail,
+                    onValueChange = { otherUserEmail = it },
+                    label = { Text(text = "对方邮箱，可选") },
                     singleLine = true,
                     enabled = !isCreating,
                 )
@@ -131,7 +148,7 @@ fun ChatListScreen(
 
             if (!isLoading && chats.isEmpty()) {
                 Text(
-                    text = "暂无聊天。输入名称后点击新建。",
+                    text = "暂无聊天。输入名称后点击新建；也可以填写对方邮箱。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
