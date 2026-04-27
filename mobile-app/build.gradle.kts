@@ -18,9 +18,13 @@ android {
 
         val supabaseUrl = project.findProperty("SUPABASE_URL") as? String ?: ""
         val supabaseAnonKey = project.findProperty("SUPABASE_ANON_KEY") as? String ?: ""
+        val allowDemoMode = (project.findProperty("WATCHCHAT_ALLOW_DEMO_MODE") as? String)
+            ?.toBooleanStrictOrNull()
+            ?: false
 
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+        buildConfigField("Boolean", "ALLOW_DEMO_MODE", allowDemoMode.toString())
     }
 
     buildFeatures {
