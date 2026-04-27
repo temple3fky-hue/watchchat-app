@@ -1,10 +1,7 @@
 package com.temple.watchchat.wear.ui
 
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
-import android.os.VibrationEffect
-import android.os.Vibrator
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
 import com.temple.watchchat.wear.data.WearFakeChatRepository
+import com.temple.watchchat.wear.util.WearVibration
 import java.util.Locale
 
 @Composable
@@ -63,7 +61,7 @@ fun WearChatDetailScreen(
         )
         messages.add(message)
         statusText = "已回复：$text"
-        vibrateSuccess(context)
+        WearVibration.success(context)
     }
 
     val voiceInputLauncher = rememberLauncherForActivityResult(
@@ -77,19 +75,19 @@ fun WearChatDetailScreen(
 
             if (spokenText.isNullOrEmpty()) {
                 statusText = "未识别到语音"
-                vibrateError(context)
+                WearVibration.error(context)
             } else {
                 sendQuickReply(spokenText)
             }
         } else {
             statusText = "已取消语音输入"
-            vibrateError(context)
+            WearVibration.error(context)
         }
     }
 
     fun startVoiceInput() {
         statusText = "正在打开语音输入..."
-        vibrateTap(context)
+        WearVibration.tap(context)
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(
                 RecognizerIntent.EXTRA_LANGUAGE_MODEL,
@@ -103,7 +101,7 @@ fun WearChatDetailScreen(
             voiceInputLauncher.launch(intent)
         }.onFailure {
             statusText = "当前设备不支持语音输入"
-            vibrateError(context)
+            WearVibration.error(context)
         }
     }
 
@@ -259,37 +257,4 @@ private fun QuickReplyButton(
             style = MaterialTheme.typography.labelSmall,
         )
     }
-}
-
-private fun vibrateTap(context: Context) {
-    vibrate(context = context, milliseconds = 35L, amplitude = 90)
-}
-
-private fun vibrateSuccess(context: Context) {
-    vibrate(context = context, milliseconds = 70L, amplitude = 140)
-}
-
-private fun vibrateError(context: Context) {
-    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
-    vibrator.vibrate(
-        VibrationEffect.createWaveform(
-            longArrayOf(0L, 60L, 70L, 90L),
-            intArrayOf(0, 120, 0, 180),
-            -1,
-        ),
-    )
-}
-
-private fun vibrate(
-    context: Context,
-    milliseconds: Long,
-    amplitude: Int,
-) {
-    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
-    vibrator.vibrate(
-        VibrationEffect.createOneShot(
-            milliseconds,
-            amplitude.coerceIn(1, 255),
-        ),
-    )
 }
