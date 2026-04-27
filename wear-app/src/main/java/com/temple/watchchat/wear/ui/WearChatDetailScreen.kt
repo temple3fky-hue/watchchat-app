@@ -43,7 +43,7 @@ fun WearChatDetailScreen(
             addAll(WearFakeChatRepository.getMessages(chat.id))
         }
     }
-    var lastReply by remember(chat.id) { mutableStateOf<String?>(null) }
+    var statusText by remember(chat.id) { mutableStateOf("消息") }
 
     fun sendQuickReply(text: String) {
         val message = WearFakeChatRepository.sendQuickReply(
@@ -51,7 +51,11 @@ fun WearChatDetailScreen(
             content = text,
         )
         messages.add(message)
-        lastReply = "已回复：$text"
+        statusText = "已回复：$text"
+    }
+
+    fun startVoiceInput() {
+        statusText = "语音输入待接入"
     }
 
     Surface(
@@ -82,7 +86,7 @@ fun WearChatDetailScreen(
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        text = lastReply ?: "消息",
+                        text = statusText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -103,8 +107,9 @@ fun WearChatDetailScreen(
 
             Spacer(modifier = Modifier.size(6.dp))
 
-            QuickReplyRow(
+            QuickReplyPanel(
                 onReplyClick = { reply -> sendQuickReply(reply) },
+                onVoiceClick = { startVoiceInput() },
             )
         }
     }
@@ -145,25 +150,64 @@ private fun WearMessageBubble(message: Message) {
 }
 
 @Composable
-private fun QuickReplyRow(
+private fun QuickReplyPanel(
     onReplyClick: (String) -> Unit,
+    onVoiceClick: () -> Unit,
 ) {
-    val replies = listOf("好的", "收到", "等一下")
+    val firstRowReplies = listOf("好的", "收到", "等一下")
+    val secondRowReplies = listOf("马上", "在忙")
 
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        replies.forEach { reply ->
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = { onReplyClick(reply) },
-            ) {
-                Text(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            firstRowReplies.forEach { reply ->
+                QuickReplyButton(
                     text = reply,
-                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onReplyClick(reply) },
                 )
             }
         }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            secondRowReplies.forEach { reply ->
+                QuickReplyButton(
+                    text = reply,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onReplyClick(reply) },
+                )
+            }
+
+            QuickReplyButton(
+                text = "语音",
+                modifier = Modifier.weight(1f),
+                onClick = onVoiceClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun QuickReplyButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Button(
+        modifier = modifier,
+        onClick = onClick,
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
