@@ -6,6 +6,9 @@ import com.temple.watchchat.shared.model.MessageStatus
 import com.temple.watchchat.shared.model.MessageType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -160,6 +163,15 @@ object SupabaseChatRepository : ChatRepository {
                 .map { it.toMessage() }
         }.getOrElse {
             FakeChatRepository.getMessages(chatId)
+        }
+    }
+
+    override fun observeMessageChanges(chatId: String): Flow<Unit> {
+        return flow {
+            while (true) {
+                delay(3_000)
+                emit(Unit)
+            }
         }
     }
 
