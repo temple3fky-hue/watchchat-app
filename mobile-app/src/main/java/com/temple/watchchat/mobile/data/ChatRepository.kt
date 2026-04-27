@@ -34,8 +34,13 @@ object ChatRepositoryProvider {
 }
 
 private object LocalChatRepository : ChatRepository {
+    private val localChats = FakeChatRepository.getChats().toMutableList()
+    private val localMessagesByChatId = localChats.associate { chat ->
+        chat.id to FakeChatRepository.getMessages(chat.id).toMutableList()
+    }.toMutableMap()
+
     override suspend fun getChats(): List<Chat> {
-        return FakeChatRepository.getChats()
+        return localChats.sortedByDescending { chat -> chat.updatedAtMillis }
     }
 
     override suspend fun createChat(
@@ -44,29 +49,34 @@ private object LocalChatRepository : ChatRepository {
     ): Chat {
         val now = System.currentTimeMillis()
         val cleanTitle = title.trim().ifBlank { "新的聊天" }
+        val cleanEmail = otherUserEmail.trim()
         val participants = buildList {
             add("me")
-            if (otherUserEmail.trim().isNotEmpty()) {
-                add(otherUserEmail.trim())
+            if (cleanEmail.isNotEmpty()) {
+                add(cleanEmail)
             }
         }
 
-        return Chat(
+        val chat = Chat(
             id = "local_chat_$now",
             title = cleanTitle,
             participantIds = participants,
-            lastMessagePreview = if (otherUserEmail.trim().isNotEmpty()) {
-                "已添加：${otherUserEmail.trim()}"
+            lastMessagePreview = if (cleanEmail.isNotEmpty()) {
+                "已添加：$cleanEmail"
             } else {
                 "本地新建聊天"
             },
             updatedAtMillis = now,
             unreadCount = 0,
         )
+
+        localChats.add(0, chat)
+        localMessagesByChatId[chat.id] = mutableListOf()
+        return chat
     }
 
     override suspend fun getMessages(chatId: String): List<Message> {
-        return FakeChatRepository.getMessages(chatId)
+        return localMessagesByChatId[chatId]?.toList().orEmpty()
     }
 
     override fun observeMessageChanges(chatId: String): Flow<Unit> {
@@ -77,9 +87,22 @@ private object LocalChatRepository : ChatRepository {
         chatId: String,
         content: String,
     ): Message {
-        return FakeChatRepository.createLocalTextMessage(
+        val message = FakeChatRepository.createLocalTextMessage(
             chatId = chatId,
             content = content,
         )
+
+        localMessagesByChatId.getOrPut(chatId) { mutableListOf() }.add(message)
+
+        val chatIndex = localChats.indexOfFirst { chat -> chat.id == chatId }
+        if (chatIndex >= 0) {
+            localChats[chatIndex] = localChats[chatIndex].copy(
+                lastMessagePreview = content,
+                updatedAtMillis = message.createdAtMillis,
+                unreadCount = 0,
+            )
+        }
+
+        return message
     }
 }
