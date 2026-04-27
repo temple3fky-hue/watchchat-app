@@ -36,7 +36,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.temple.watchchat.shared.model.Chat
+import com.temple.watchchat.shared.sync.WearSyncEvent
 import com.temple.watchchat.wear.data.WearFakeChatRepository
+import com.temple.watchchat.wear.sync.WearSyncClient
 import com.temple.watchchat.wear.util.WearVibration
 
 @Composable
@@ -53,6 +55,21 @@ fun WearChatListScreen(
         chats = WearFakeChatRepository.getRecentChats()
         statusText = "收到新消息"
         WearVibration.incomingMessage(context)
+    }
+
+    fun openChat(chat: Chat) {
+        WearFakeChatRepository.markChatRead(chat.id)
+        chats = WearFakeChatRepository.getRecentChats()
+        statusText = "已读：${chat.title}"
+
+        WearSyncClient.sendMarkChatReadRequested(
+            context = context,
+            event = WearSyncEvent.MarkChatReadRequested(
+                chatId = chat.id,
+            ),
+        )
+
+        onChatClick(chat.copy(unreadCount = 0))
     }
 
     Surface(
@@ -98,11 +115,7 @@ fun WearChatListScreen(
                 items(chats) { chat ->
                     WearChatListItem(
                         chat = chat,
-                        onClick = {
-                            WearFakeChatRepository.markChatRead(chat.id)
-                            chats = WearFakeChatRepository.getRecentChats()
-                            onChatClick(chat.copy(unreadCount = 0))
-                        },
+                        onClick = { openChat(chat) },
                     )
                 }
             }
