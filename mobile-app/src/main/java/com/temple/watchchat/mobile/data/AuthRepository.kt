@@ -62,6 +62,19 @@ object AuthRepository {
         )
     }
 
+    suspend fun signOut(): AuthResult {
+        val client = SupabaseClientProvider.client
+            ?: return AuthResult.Success(isFakeAuth = true)
+
+        return runCatching {
+            client.auth.signOut()
+            AuthResult.Success(isFakeAuth = false)
+        }.fold(
+            onSuccess = { result -> result },
+            onFailure = { error -> AuthResult.Error(error.toUserMessage()) },
+        )
+    }
+
     suspend fun hasActiveSession(): Boolean {
         val client = SupabaseClientProvider.client ?: return false
         return client.auth.currentSessionOrNull() != null
@@ -83,5 +96,5 @@ sealed class AuthResult {
 }
 
 private fun Throwable.toUserMessage(): String {
-    return message?.takeIf { it.isNotBlank() } ?: "登录失败，请稍后重试。"
+    return message?.takeIf { it.isNotBlank() } ?: "操作失败，请稍后重试。"
 }
