@@ -20,39 +20,55 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.temple.watchchat.mobile.data.FakeChatRepository
+import com.temple.watchchat.mobile.data.ChatRepositoryProvider
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
 import com.temple.watchchat.shared.model.MessageStatus
+import kotlinx.coroutines.launch
 
 @Composable
 fun ChatDetailScreen(
     chat: Chat,
     onBack: () -> Unit,
 ) {
-    val messages = remember(chat.id) { FakeChatRepository.getMessages(chat.id).toMutableStateList() }
+    val scope = rememberCoroutineScope()
+    val messages = remember(chat.id) { mutableStateListOf<Message>() }
     var inputText by remember(chat.id) { mutableStateOf("") }
+    var isLoading by remember(chat.id) { mutableStateOf(true) }
+    var isSending by remember(chat.id) { mutableStateOf(false) }
+
+    LaunchedEffect(chat.id) {
+        isLoading = true
+        messages.clear()
+        messages.addAll(ChatRepositoryProvider.current().getMessages(chat.id))
+        isLoading = false
+    }
 
     fun sendMessage() {
         val content = inputText.trim()
-        if (content.isEmpty()) return
+        if (content.isEmpty() || isSending) return
 
-        messages.add(
-            FakeChatRepository.createLocalTextMessage(
+        isSending = true
+        scope.launch {
+            val sentMessage = ChatRepositoryProvider.current().sendTextMessage(
                 chatId = chat.id,
                 content = content,
-            ),
-        )
-        inputText = ""
+            )
+            messages.add(sentMessage)
+            inputText = ""
+            isSending = false
+        }
     }
 
     Surface(
@@ -78,7 +94,7 @@ fun ChatDetailScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "聊天详情",
+                        text = if (isLoading) "正在加载消息..." else "聊天详情",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -108,13 +124,14 @@ fun ChatDetailScreen(
                     onValueChange = { inputText = it },
                     placeholder = { Text(text = "输入消息...") },
                     singleLine = true,
+                    enabled = !isSending,
                 )
                 Spacer(modifier = Modifier.size(8.dp))
                 Button(
                     onClick = { sendMessage() },
-                    enabled = inputText.trim().isNotEmpty(),
+                    enabled = inputText.trim().isNotEmpty() && !isSending,
                 ) {
-                    Text(text = "发送")
+                    Text(text = if (isSending) "发送中" else "发送")
                 }
             }
         }
@@ -123,7 +140,7 @@ fun ChatDetailScreen(
 
 @Composable
 private fun MessageBubble(message: Message) {
-    val isMine = message.senderId == "me"
+    val isMine = message.senderId == "me" || message.senderId.startsWith("local_")
     val rowArrangement = if (isMine) Arrangement.End else Arrangement.Start
     val bubbleColor = if (isMine) {
         MaterialTheme.colorScheme.primaryContainer
