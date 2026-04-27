@@ -5,10 +5,10 @@ import com.temple.watchchat.shared.model.Message
 import com.temple.watchchat.shared.model.MessageStatus
 
 /**
- * 手表端本地假数据。
+ * 手表端本地聊天缓存。
  *
- * 第一版先让 Wear OS 界面跑起来。
- * 后续会通过手机同步或 Supabase 拉取真实聊天。
+ * 第一版先支持假数据和手机端同步数据混用。
+ * 手机端通过 Wear Data Layer 推送数据后，会写入这里。
  */
 object WearFakeChatRepository {
     private val messagesByChatId = mutableMapOf(
@@ -75,28 +75,87 @@ object WearFakeChatRepository {
         "wear_chat_003" to 1,
     )
 
+    private val syncedChats = mutableMapOf<String, Chat>()
+
     fun getRecentChats(): List<Chat> {
-        return listOf(
-            buildChat(
-                id = "wear_chat_001",
-                title = "小明",
-                participantIds = listOf("me", "user_001"),
-            ),
-            buildChat(
-                id = "wear_chat_002",
-                title = "阿强",
-                participantIds = listOf("me", "user_002"),
-            ),
-            buildChat(
-                id = "wear_chat_003",
-                title = "家人",
-                participantIds = listOf("me", "user_003"),
-            ),
-        )
+        return if (syncedChats.isNotEmpty()) {
+            syncedChats.values
+                .map { chat ->
+                    val lastMessage = messagesByChatId[chat.id]?.lastOrNull()
+                    chat.copy(
+                        lastMessagePreview = lastMessage?.content ?: chat.lastMessagePreview,
+                        unreadCount = unreadCounts[chat.id] ?: chat.unreadCount,
+                        updatedAtMillis = lastMessage?.createdAtMillis ?: chat.updatedAtMillis,
+                    )
+                }
+                .sortedByDescending { chat -> chat.updatedAtMillis }
+        } else {
+            listOf(
+                buildChat(
+                    id = "wear_chat_001",
+                    title = "小明",
+                    participantIds = listOf("me", "user_001"),
+                ),
+                buildChat(
+                    id = "wear_chat_002",
+                    title = "阿强",
+                    participantIds = listOf("me", "user_002"),
+                ),
+                buildChat(
+                    id = "wear_chat_003",
+                    title = "家人",
+                    participantIds = listOf("me", "user_003"),
+                ),
+            )
+        }
     }
 
     fun getMessages(chatId: String): List<Message> {
         return messagesByChatId[chatId]?.toList().orEmpty()
+    }
+
+    fun replaceChats(chats: List<Chat>) {
+        syncedChats.clear()
+        chats.forEach { chat ->
+            syncedChats[chat.id] = chat.copy(
+                unreadCount = unreadCounts[chat.id] ?: chat.unreadCount,
+            )
+        }
+    }
+
+    fun replaceMessages(
+        chatId: String,
+        messages: List<Message>,
+    ) {
+        messagesByChatId[chatId] = messages.toMutableList()
+        val latest = messages.lastOrNull()
+        val chat = syncedChats[chatId]
+        if (chat != null && latest != null) {
+            syncedChats[chatId] = chat.copy(
+                lastMessagePreview = latest.content,
+                updatedAtMillis = latest.createdAtMillis,
+            )
+        }
+    }
+
+    fun addIncomingMessage(
+        chatId: String,
+        message: Message,
+    ) {
+        val messages = messagesByChatId.getOrPut(chatId) { mutableListOf() }
+        if (messages.none { it.id == message.id }) {
+            messages.add(message)
+        }
+
+        unreadCounts[chatId] = (unreadCounts[chatId] ?: 0) + 1
+        val chat = syncedChats[chatId]
+        if (chat != null) {
+            syncedChats[chatId] = chat.copy(
+                lastMessagePreview = message.content,
+                unreadCount = unreadCounts[chatId] ?: 0,
+                updatedAtMillis = message.createdAtMillis,
+            )
+        }
     }
 
     fun sendQuickReply(
@@ -114,6 +173,12 @@ object WearFakeChatRepository {
         )
 
         messagesByChatId.getOrPut(chatId) { mutableListOf() }.add(message)
+        syncedChats[chatId]?.let { chat ->
+            syncedChats[chatId] = chat.copy(
+                lastMessagePreview = content,
+                updatedAtMillis = now,
+            )
+        }
         return message
     }
 
@@ -128,13 +193,15 @@ object WearFakeChatRepository {
             createdAtMillis = now,
         )
 
-        messagesByChatId.getOrPut(chatId) { mutableListOf() }.add(message)
-        unreadCounts[chatId] = (unreadCounts[chatId] ?: 0) + 1
+        addIncomingMessage(chatId, message)
         return message
     }
 
     fun markChatRead(chatId: String) {
         unreadCounts[chatId] = 0
+        syncedChats[chatId]?.let { chat ->
+            syncedChats[chatId] = chat.copy(unreadCount = 0)
+        }
     }
 
     private fun buildChat(
