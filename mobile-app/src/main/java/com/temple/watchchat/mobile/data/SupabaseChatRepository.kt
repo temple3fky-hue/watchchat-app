@@ -35,6 +35,43 @@ object SupabaseChatRepository : ChatRepository {
         }
     }
 
+    override suspend fun createChat(title: String): Chat {
+        val client = SupabaseClientProvider.client ?: return createLocalFallbackChat(title)
+        val currentUserId = client.auth.currentSessionOrNull()?.user?.id
+            ?: return createLocalFallbackChat(title)
+        val cleanTitle = title.trim().ifBlank { "新的聊天" }
+
+        return runCatching {
+            val createdChat = client.from("chats")
+                .insert(
+                    ChatInsertDto(
+                        title = cleanTitle,
+                        createdBy = currentUserId,
+                    ),
+                ) {
+                    select()
+                }
+                .decodeSingle<ChatDto>()
+
+            client.from("chat_members").insert(
+                ChatMemberInsertDto(
+                    chatId = createdChat.id,
+                    userId = currentUserId,
+                ),
+            )
+
+            Chat(
+                id = createdChat.id,
+                title = createdChat.title.ifBlank { cleanTitle },
+                participantIds = listOf(currentUserId),
+                lastMessagePreview = "新建聊天成功",
+                unreadCount = 0,
+            )
+        }.getOrElse {
+            createLocalFallbackChat(cleanTitle)
+        }
+    }
+
     override suspend fun getMessages(chatId: String): List<Message> {
         val client = SupabaseClientProvider.client ?: return FakeChatRepository.getMessages(chatId)
 
@@ -80,10 +117,46 @@ object SupabaseChatRepository : ChatRepository {
             FakeChatRepository.createLocalTextMessage(chatId, content)
         }
     }
+
+    private fun createLocalFallbackChat(title: String): Chat {
+        val now = System.currentTimeMillis()
+        val cleanTitle = title.trim().ifBlank { "新的聊天" }
+        return Chat(
+            id = "local_chat_$now",
+            title = cleanTitle,
+            participantIds = listOf("me"),
+            lastMessagePreview = "本地新建聊天",
+            updatedAtMillis = now,
+            unreadCount = 0,
+        )
+    }
 }
 
 @Serializable
+private data class ChatDto(
+    val id: String,
+    val title: String = "",
+    @SerialName("created_by")
+    val createdBy: String,
+)
+
+@Serializable
+private data class ChatInsertDto(
+    val title: String,
+    @SerialName("created_by")
+    val createdBy: String,
+)
+
+@Serializable
 private data class ChatMemberDto(
+    @SerialName("chat_id")
+    val chatId: String,
+    @SerialName("user_id")
+    val userId: String,
+)
+
+@Serializable
+private data class ChatMemberInsertDto(
     @SerialName("chat_id")
     val chatId: String,
     @SerialName("user_id")
