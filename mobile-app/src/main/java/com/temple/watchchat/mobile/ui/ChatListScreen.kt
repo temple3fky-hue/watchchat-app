@@ -22,13 +22,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.temple.watchchat.mobile.data.FakeChatRepository
+import com.temple.watchchat.mobile.data.ChatRepositoryProvider
 import com.temple.watchchat.shared.model.Chat
 
 @Composable
@@ -36,7 +41,14 @@ fun ChatListScreen(
     onChatClick: (Chat) -> Unit,
     onSignOutClick: () -> Unit,
 ) {
-    val chats = FakeChatRepository.getChats()
+    var chats by remember { mutableStateOf<List<Chat>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    LaunchedEffect(Unit) {
+        isLoading = true
+        chats = ChatRepositoryProvider.current().getChats()
+        isLoading = false
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -58,7 +70,7 @@ fun ChatListScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = "最近聊天",
+                        text = if (isLoading) "正在加载聊天..." else "最近聊天",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -71,14 +83,22 @@ fun ChatListScreen(
 
             Spacer(modifier = Modifier.size(16.dp))
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(chats) { chat ->
-                    ChatListItem(
-                        chat = chat,
-                        onClick = { onChatClick(chat) },
-                    )
+            if (!isLoading && chats.isEmpty()) {
+                Text(
+                    text = "暂无聊天。后续会增加创建聊天功能。",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(chats) { chat ->
+                        ChatListItem(
+                            chat = chat,
+                            onClick = { onChatClick(chat) },
+                        )
+                    }
                 }
             }
         }
