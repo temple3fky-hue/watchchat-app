@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.item
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -53,11 +54,24 @@ fun WearChatDetailScreen(
     val context = LocalContext.current
     val changeVersion by WearFakeChatRepository.changeVersion.collectAsState()
     val messages = remember(chat.id) { mutableStateListOf<Message>() }
-    var statusText by remember(chat.id) { mutableStateOf("消息") }
+    var statusText by remember(chat.id) { mutableStateOf("正在同步消息...") }
+
+    fun requestMessagesSync() {
+        statusText = "正在同步消息..."
+        WearSyncClient.sendChatMessagesSyncRequested(
+            context = context,
+            chatId = chat.id,
+        )
+    }
+
+    LaunchedEffect(chat.id) {
+        requestMessagesSync()
+    }
 
     LaunchedEffect(chat.id, changeVersion) {
         messages.clear()
         messages.addAll(WearFakeChatRepository.getMessages(chat.id))
+        statusText = if (messages.isEmpty()) "暂无消息" else "消息"
     }
 
     fun sendQuickReply(
@@ -180,12 +194,35 @@ fun WearChatDetailScreen(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(
-                    items = messages,
-                    key = { message -> message.id },
-                ) { message ->
-                    WearMessageBubble(message = message)
+                if (messages.isEmpty()) {
+                    item {
+                        Text(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            text = "没有收到消息。请确认手机端 WatchChat 已登录并保持连接，然后点下方同步。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                } else {
+                    items(
+                        items = messages,
+                        key = { message -> message.id },
+                    ) { message ->
+                        WearMessageBubble(message = message)
+                    }
                 }
+            }
+
+            Spacer(modifier = Modifier.size(6.dp))
+
+            Button(onClick = { requestMessagesSync() }) {
+                Text(
+                    text = "同步消息",
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
 
             Spacer(modifier = Modifier.size(6.dp))
