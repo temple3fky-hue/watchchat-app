@@ -79,6 +79,11 @@ object AuthRepository {
         val client = SupabaseClientProvider.client ?: return false
         return client.auth.currentSessionOrNull() != null
     }
+
+    suspend fun currentUserId(): String? {
+        val client = SupabaseClientProvider.client ?: return "me"
+        return client.auth.currentSessionOrNull()?.user?.id
+    }
 }
 
 sealed class AuthResult {
