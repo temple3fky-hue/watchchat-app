@@ -9,7 +9,7 @@ object AuthRepository {
         password: String,
     ): AuthResult {
         val client = SupabaseClientProvider.client
-            ?: return AuthResult.Success(isFakeAuth = true)
+            ?: return missingConfigOrDemoSuccess()
 
         return runCatching {
             client.auth.signInWith(Email) {
@@ -34,7 +34,7 @@ object AuthRepository {
         password: String,
     ): AuthResult {
         val client = SupabaseClientProvider.client
-            ?: return AuthResult.Success(isFakeAuth = true)
+            ?: return missingConfigOrDemoSuccess()
 
         return runCatching {
             val cleanEmail = email.trim()
@@ -64,7 +64,11 @@ object AuthRepository {
 
     suspend fun signOut(): AuthResult {
         val client = SupabaseClientProvider.client
-            ?: return AuthResult.Success(isFakeAuth = true)
+            ?: return if (SupabaseClientProvider.isDemoModeAllowed) {
+                AuthResult.Success(isFakeAuth = true)
+            } else {
+                AuthResult.Error(SupabaseClientProvider.productionConfigError ?: "Supabase 未配置。")
+            }
 
         return runCatching {
             client.auth.signOut()
@@ -81,8 +85,16 @@ object AuthRepository {
     }
 
     suspend fun currentUserId(): String? {
-        val client = SupabaseClientProvider.client ?: return "me"
+        val client = SupabaseClientProvider.client ?: return if (SupabaseClientProvider.isDemoModeAllowed) "me" else null
         return client.auth.currentSessionOrNull()?.user?.id
+    }
+
+    private fun missingConfigOrDemoSuccess(): AuthResult {
+        return if (SupabaseClientProvider.isDemoModeAllowed) {
+            AuthResult.Success(isFakeAuth = true)
+        } else {
+            AuthResult.Error(SupabaseClientProvider.productionConfigError ?: "正式模式需要配置 Supabase。")
+        }
     }
 }
 
