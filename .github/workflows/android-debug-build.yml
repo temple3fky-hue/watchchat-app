@@ -1,0 +1,57 @@
+name: Android Debug Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-debug-apks:
+    name: Build mobile and wear debug APKs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.10.2
+
+      - name: Create empty local.properties for CI
+        run: |
+          cat > local.properties <<'EOF'
+          SUPABASE_URL=
+          SUPABASE_ANON_KEY=
+          EOF
+
+      - name: Build debug APKs
+        run: gradle :mobile-app:assembleDebug :wear-app:assembleDebug --stacktrace
+
+      - name: Upload mobile debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-app-debug-apk
+          path: mobile-app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Upload wear debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wear-app-debug-apk
+          path: wear-app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
