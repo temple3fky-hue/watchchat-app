@@ -69,28 +69,28 @@ object WearFakeChatRepository {
         ),
     )
 
+    private val unreadCounts = mutableMapOf(
+        "wear_chat_001" to 2,
+        "wear_chat_002" to 0,
+        "wear_chat_003" to 1,
+    )
+
     fun getRecentChats(): List<Chat> {
         return listOf(
-            Chat(
+            buildChat(
                 id = "wear_chat_001",
                 title = "小明",
                 participantIds = listOf("me", "user_001"),
-                lastMessagePreview = messagesByChatId["wear_chat_001"]?.lastOrNull()?.content.orEmpty(),
-                unreadCount = 2,
             ),
-            Chat(
+            buildChat(
                 id = "wear_chat_002",
                 title = "阿强",
                 participantIds = listOf("me", "user_002"),
-                lastMessagePreview = messagesByChatId["wear_chat_002"]?.lastOrNull()?.content.orEmpty(),
-                unreadCount = 0,
             ),
-            Chat(
+            buildChat(
                 id = "wear_chat_003",
                 title = "家人",
                 participantIds = listOf("me", "user_003"),
-                lastMessagePreview = messagesByChatId["wear_chat_003"]?.lastOrNull()?.content.orEmpty(),
-                unreadCount = 1,
             ),
         )
     }
@@ -115,5 +115,39 @@ object WearFakeChatRepository {
 
         messagesByChatId.getOrPut(chatId) { mutableListOf() }.add(message)
         return message
+    }
+
+    fun simulateIncomingMessage(chatId: String): Message {
+        val now = System.currentTimeMillis()
+        val message = Message(
+            id = "wear_incoming_$now",
+            chatId = chatId,
+            senderId = "remote_user",
+            content = "这是一条新的手表提醒消息",
+            status = MessageStatus.READ,
+            createdAtMillis = now,
+        )
+
+        messagesByChatId.getOrPut(chatId) { mutableListOf() }.add(message)
+        unreadCounts[chatId] = (unreadCounts[chatId] ?: 0) + 1
+        return message
+    }
+
+    fun markChatRead(chatId: String) {
+        unreadCounts[chatId] = 0
+    }
+
+    private fun buildChat(
+        id: String,
+        title: String,
+        participantIds: List<String>,
+    ): Chat {
+        return Chat(
+            id = id,
+            title = title,
+            participantIds = participantIds,
+            lastMessagePreview = messagesByChatId[id]?.lastOrNull()?.content.orEmpty(),
+            unreadCount = unreadCounts[id] ?: 0,
+        )
     }
 }
