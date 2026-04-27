@@ -8,9 +8,28 @@ import com.temple.watchchat.shared.sync.WearSyncJson
 import com.temple.watchchat.shared.sync.WearSyncPaths
 
 /**
- * 手表端主动发送请求到手机端的客户端骨架。
+ * 手表端主动发送请求到手机端的客户端。
  */
 object WearSyncClient {
+    fun sendChatListSyncRequested(context: Context) {
+        sendToConnectedNodes(
+            context = context,
+            path = WearSyncPaths.CHAT_LIST_SYNC_REQUESTED,
+            event = WearSyncEvent.ChatListSyncRequested,
+        )
+    }
+
+    fun sendChatMessagesSyncRequested(
+        context: Context,
+        chatId: String,
+    ) {
+        sendToConnectedNodes(
+            context = context,
+            path = WearSyncPaths.CHAT_MESSAGES_SYNC_REQUESTED,
+            event = WearSyncEvent.ChatMessagesSyncRequested(chatId = chatId),
+        )
+    }
+
     fun sendQuickReplyRequested(
         context: Context,
         event: WearSyncEvent.QuickReplyRequested,
@@ -55,6 +74,9 @@ object WearSyncClient {
 
         nodeClient.connectedNodes
             .addOnSuccessListener { nodes ->
+                if (nodes.isEmpty()) {
+                    Log.w(TAG, "No connected phone nodes for path: $path")
+                }
                 nodes.forEach { node ->
                     messageClient.sendMessage(node.id, path, payload)
                         .addOnSuccessListener {
