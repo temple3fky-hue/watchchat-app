@@ -47,12 +47,30 @@ fun ChatDetailScreen(
     var inputText by remember(chat.id) { mutableStateOf("") }
     var isLoading by remember(chat.id) { mutableStateOf(true) }
     var isSending by remember(chat.id) { mutableStateOf(false) }
+    var refreshText by remember(chat.id) { mutableStateOf("聊天详情") }
+
+    suspend fun reloadMessages(showRefreshing: Boolean = false) {
+        if (showRefreshing) {
+            refreshText = "正在同步新消息..."
+        }
+        val latestMessages = ChatRepositoryProvider.current().getMessages(chat.id)
+        messages.clear()
+        messages.addAll(latestMessages)
+        isLoading = false
+        refreshText = "聊天详情"
+    }
 
     LaunchedEffect(chat.id) {
         isLoading = true
-        messages.clear()
-        messages.addAll(ChatRepositoryProvider.current().getMessages(chat.id))
-        isLoading = false
+        reloadMessages()
+    }
+
+    LaunchedEffect(chat.id) {
+        ChatRepositoryProvider.current()
+            .observeMessageChanges(chat.id)
+            .collect {
+                reloadMessages(showRefreshing = true)
+            }
     }
 
     fun sendMessage() {
@@ -94,7 +112,7 @@ fun ChatDetailScreen(
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        text = if (isLoading) "正在加载消息..." else "聊天详情",
+                        text = if (isLoading) "正在加载消息..." else refreshText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
