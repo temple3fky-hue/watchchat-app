@@ -16,20 +16,62 @@ object SupabaseChatRepository : ChatRepository {
             ?: return FakeChatRepository.getChats()
 
         return runCatching {
-            val memberships = client.from("chat_members")
+            val myMemberships = client.from("chat_members")
                 .select()
                 .decodeList<ChatMemberDto>()
                 .filter { it.userId == currentUserId }
 
-            memberships.map { member ->
-                Chat(
-                    id = member.chatId,
-                    title = "聊天 ${member.chatId.takeLast(4)}",
-                    participantIds = listOf(currentUserId),
-                    lastMessagePreview = "点击进入聊天",
-                    unreadCount = 0,
-                )
-            }
+            val myChatIds = myMemberships.map { it.chatId }.toSet()
+            if (myChatIds.isEmpty()) return@runCatching emptyList()
+
+            val chats = client.from("chats")
+                .select()
+                .decodeList<ChatDto>()
+                .filter { it.id in myChatIds }
+
+            val allMembers = client.from("chat_members")
+                .select()
+                .decodeList<ChatMemberDto>()
+                .filter { it.chatId in myChatIds }
+
+            val memberUserIds = allMembers.map { it.userId }.toSet()
+            val profilesById = client.from("profiles")
+                .select()
+                .decodeList<ProfileDto>()
+                .filter { it.id in memberUserIds }
+                .associateBy { it.id }
+
+            val messagesByChatId = client.from("messages")
+                .select()
+                .decodeList<MessageDto>()
+                .filter { it.chatId in myChatIds }
+                .groupBy { it.chatId }
+
+            chats
+                .sortedByDescending { it.updatedAt ?: it.createdAt ?: "" }
+                .map { chatDto ->
+                    val members = allMembers.filter { it.chatId == chatDto.id }
+                    val participantIds = members.map { it.userId }
+                    val otherMemberNames = members
+                        .mapNotNull { member -> profilesById[member.userId] }
+                        .filter { profile -> profile.id != currentUserId }
+                        .map { profile -> profile.displayName.ifBlank { profile.email } }
+
+                    val lastMessage = messagesByChatId[chatDto.id]
+                        ?.maxByOrNull { it.createdAt ?: "" }
+
+                    Chat(
+                        id = chatDto.id,
+                        title = chatDto.title.ifBlank {
+                            otherMemberNames.joinToString().ifBlank {
+                                "聊天 ${chatDto.id.takeLast(4)}"
+                            }
+                        },
+                        participantIds = participantIds,
+                        lastMessagePreview = lastMessage?.previewText() ?: "暂无消息",
+                        unreadCount = 0,
+                    )
+                }
         }.getOrElse {
             FakeChatRepository.getChats()
         }
@@ -195,6 +237,10 @@ private data class ChatDto(
     val title: String = "",
     @SerialName("created_by")
     val createdBy: String,
+    @SerialName("created_at")
+    val createdAt: String? = null,
+    @SerialName("updated_at")
+    val updatedAt: String? = null,
 )
 
 @Serializable
@@ -248,6 +294,14 @@ private data class MessageDto(
                 else -> MessageStatus.SENT
             },
         )
+    }
+
+    fun previewText(): String {
+        return if (messageType == "voice") {
+            "[语音消息]"
+        } else {
+            content.ifBlank { "[空消息]" }
+        }
     }
 }
 
