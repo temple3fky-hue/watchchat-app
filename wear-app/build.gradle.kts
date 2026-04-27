@@ -29,4 +29,6 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    implementation("com.google.android.gms:play-services-wearable:19.0.0")
 }
