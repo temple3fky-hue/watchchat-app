@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.temple.watchchat.shared.model.Chat
+import com.temple.watchchat.wear.ui.WearChatDetailScreen
 import com.temple.watchchat.wear.ui.WearChatListScreen
 
 class MainActivity : ComponentActivity() {
@@ -19,10 +20,16 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 var selectedChat by remember { mutableStateOf<Chat?>(null) }
 
-                // 下一步会把 selectedChat 接到手表端消息详情页。
-                WearChatListScreen(
-                    onChatClick = { chat -> selectedChat = chat },
-                )
+                if (selectedChat == null) {
+                    WearChatListScreen(
+                        onChatClick = { chat -> selectedChat = chat },
+                    )
+                } else {
+                    WearChatDetailScreen(
+                        chat = selectedChat!!,
+                        onBack = { selectedChat = null },
+                    )
+                }
             }
         }
     }
