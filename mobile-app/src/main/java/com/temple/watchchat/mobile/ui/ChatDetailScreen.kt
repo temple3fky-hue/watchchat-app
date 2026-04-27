@@ -1,8 +1,6 @@
 package com.temple.watchchat.mobile.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +20,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -35,7 +38,25 @@ fun ChatDetailScreen(
     chat: Chat,
     onBack: () -> Unit,
 ) {
-    val messages = sampleMessages(chat.id)
+    val messages = remember(chat.id) { sampleMessages(chat.id).toMutableStateList() }
+    var inputText by remember(chat.id) { mutableStateOf("") }
+
+    fun sendMessage() {
+        val content = inputText.trim()
+        if (content.isEmpty()) return
+
+        messages.add(
+            Message(
+                id = "local_${System.currentTimeMillis()}",
+                chatId = chat.id,
+                senderId = "me",
+                content = content,
+                status = MessageStatus.SENT,
+                createdAtMillis = System.currentTimeMillis(),
+            ),
+        )
+        inputText = ""
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -86,13 +107,16 @@ fun ChatDetailScreen(
             ) {
                 OutlinedTextField(
                     modifier = Modifier.weight(1f),
-                    value = "",
-                    onValueChange = {},
+                    value = inputText,
+                    onValueChange = { inputText = it },
                     placeholder = { Text(text = "输入消息...") },
                     singleLine = true,
                 )
                 Spacer(modifier = Modifier.size(8.dp))
-                Button(onClick = {}) {
+                Button(
+                    onClick = { sendMessage() },
+                    enabled = inputText.trim().isNotEmpty(),
+                ) {
                     Text(text = "发送")
                 }
             }
