@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Badge
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +34,7 @@ import com.temple.watchchat.shared.model.Chat
 @Composable
 fun ChatListScreen(
     onChatClick: (Chat) -> Unit,
+    onSignOutClick: () -> Unit,
 ) {
     val chats = FakeChatRepository.getChats()
 
@@ -45,16 +47,27 @@ fun ChatListScreen(
                 .fillMaxSize()
                 .padding(16.dp),
         ) {
-            Text(
-                text = "WatchChat",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = "最近聊天",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "WatchChat",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = "最近聊天",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Button(onClick = onSignOutClick) {
+                    Text(text = "退出")
+                }
+            }
 
             Spacer(modifier = Modifier.size(16.dp))
 
