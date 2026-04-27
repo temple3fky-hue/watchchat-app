@@ -24,6 +24,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,22 +51,23 @@ fun WearChatDetailScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    val messages = remember(chat.id) {
-        mutableStateListOf<Message>().apply {
-            addAll(WearFakeChatRepository.getMessages(chat.id))
-        }
-    }
+    val changeVersion by WearFakeChatRepository.changeVersion.collectAsState()
+    val messages = remember(chat.id) { mutableStateListOf<Message>() }
     var statusText by remember(chat.id) { mutableStateOf("消息") }
+
+    LaunchedEffect(chat.id, changeVersion) {
+        messages.clear()
+        messages.addAll(WearFakeChatRepository.getMessages(chat.id))
+    }
 
     fun sendQuickReply(
         text: String,
         isVoiceReply: Boolean = false,
     ) {
-        val message = WearFakeChatRepository.sendQuickReply(
+        WearFakeChatRepository.sendQuickReply(
             chatId = chat.id,
             content = text,
         )
-        messages.add(message)
         statusText = if (isVoiceReply) {
             "语音已发送：$text"
         } else {
@@ -177,7 +180,10 @@ fun WearChatDetailScreen(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                items(messages) { message ->
+                items(
+                    items = messages,
+                    key = { message -> message.id },
+                ) { message ->
                     WearMessageBubble(message = message)
                 }
             }
