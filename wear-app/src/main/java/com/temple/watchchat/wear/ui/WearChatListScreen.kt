@@ -23,6 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,20 +48,23 @@ fun WearChatListScreen(
     onChatClick: (Chat) -> Unit,
 ) {
     val context = LocalContext.current
+    val changeVersion by WearFakeChatRepository.changeVersion.collectAsState()
     var chats by remember { mutableStateOf(WearFakeChatRepository.getRecentChats()) }
     var statusText by remember { mutableStateOf("最近聊天") }
+
+    LaunchedEffect(changeVersion) {
+        chats = WearFakeChatRepository.getRecentChats()
+    }
 
     fun simulateIncomingMessage() {
         val targetChat = chats.firstOrNull() ?: return
         WearFakeChatRepository.simulateIncomingMessage(targetChat.id)
-        chats = WearFakeChatRepository.getRecentChats()
         statusText = "收到新消息"
         WearVibration.incomingMessage(context)
     }
 
     fun openChat(chat: Chat) {
         WearFakeChatRepository.markChatRead(chat.id)
-        chats = WearFakeChatRepository.getRecentChats()
         statusText = "已读：${chat.title}"
 
         WearSyncClient.sendMarkChatReadRequested(
@@ -112,7 +117,10 @@ fun WearChatListScreen(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(chats) { chat ->
+                items(
+                    items = chats,
+                    key = { chat -> chat.id },
+                ) { chat ->
                     WearChatListItem(
                         chat = chat,
                         onClick = { openChat(chat) },
