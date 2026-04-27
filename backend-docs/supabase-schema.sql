@@ -61,6 +61,27 @@ create trigger trg_messages_touch_chat_updated_at
 after insert on public.messages
 for each row execute function public.touch_chat_updated_at();
 
+-- SECURITY DEFINER 避免 RLS 策略在 chat_members 上自查时出现 infinite recursion。
+create or replace function public.is_chat_member(
+  p_chat_id uuid,
+  p_user_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.chat_members cm
+    where cm.chat_id = p_chat_id
+      and cm.user_id = p_user_id
+  );
+$$;
+
+grant execute on function public.is_chat_member(uuid, uuid) to authenticated;
+
 alter table public.profiles enable row level security;
 alter table public.chats enable row level security;
 alter table public.chat_members enable row level security;
@@ -90,11 +111,8 @@ drop policy if exists "chats_select_member" on public.chats;
 create policy "chats_select_member"
 on public.chats for select
 using (
-  exists (
-    select 1 from public.chat_members cm
-    where cm.chat_id = chats.id
-      and cm.user_id = auth.uid()
-  )
+  created_by = auth.uid()
+  or public.is_chat_member(chats.id, auth.uid())
 );
 
 drop policy if exists "chats_insert_creator" on public.chats;
@@ -106,11 +124,8 @@ drop policy if exists "chats_update_member" on public.chats;
 create policy "chats_update_member"
 on public.chats for update
 using (
-  exists (
-    select 1 from public.chat_members cm
-    where cm.chat_id = chats.id
-      and cm.user_id = auth.uid()
-  )
+  created_by = auth.uid()
+  or public.is_chat_member(chats.id, auth.uid())
 );
 
 -- chat_members
@@ -119,11 +134,8 @@ drop policy if exists "chat_members_select_member" on public.chat_members;
 create policy "chat_members_select_member"
 on public.chat_members for select
 using (
-  exists (
-    select 1 from public.chat_members me
-    where me.chat_id = chat_members.chat_id
-      and me.user_id = auth.uid()
-  )
+  user_id = auth.uid()
+  or public.is_chat_member(chat_members.chat_id, auth.uid())
 );
 
 drop policy if exists "chat_members_insert_creator_or_self" on public.chat_members;
@@ -144,11 +156,7 @@ drop policy if exists "messages_select_chat_member" on public.messages;
 create policy "messages_select_chat_member"
 on public.messages for select
 using (
-  exists (
-    select 1 from public.chat_members cm
-    where cm.chat_id = messages.chat_id
-      and cm.user_id = auth.uid()
-  )
+  public.is_chat_member(messages.chat_id, auth.uid())
 );
 
 drop policy if exists "messages_insert_sender_is_member" on public.messages;
@@ -156,22 +164,14 @@ create policy "messages_insert_sender_is_member"
 on public.messages for insert
 with check (
   sender_id = auth.uid()
-  and exists (
-    select 1 from public.chat_members cm
-    where cm.chat_id = messages.chat_id
-      and cm.user_id = auth.uid()
-  )
+  and public.is_chat_member(messages.chat_id, auth.uid())
 );
 
 drop policy if exists "messages_update_chat_member" on public.messages;
 create policy "messages_update_chat_member"
 on public.messages for update
 using (
-  exists (
-    select 1 from public.chat_members cm
-    where cm.chat_id = messages.chat_id
-      and cm.user_id = auth.uid()
-  )
+  public.is_chat_member(messages.chat_id, auth.uid())
 );
 
 -- 后续语音消息使用 Supabase Storage。
