@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 /**
  * 手机端 Wear Data Layer 同步服务。
  *
- * 负责接收手表端发来的快捷回复、语音转文字回复、标记已读等请求。
+ * 负责接收手表端发来的聊天同步、快捷回复、语音转文字回复、标记已读等请求。
  */
 class MobileWearSyncService : WearableListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -32,6 +32,8 @@ class MobileWearSyncService : WearableListenerService() {
             }
 
         when (messageEvent.path) {
+            WearSyncPaths.CHAT_LIST_SYNC_REQUESTED -> handleChatListSyncRequest()
+            WearSyncPaths.CHAT_MESSAGES_SYNC_REQUESTED -> handleChatMessagesSyncRequest(event)
             WearSyncPaths.QUICK_REPLY_REQUESTED -> handleQuickReply(event)
             WearSyncPaths.VOICE_TEXT_REPLY_REQUESTED -> handleVoiceTextReply(event)
             WearSyncPaths.MARK_CHAT_READ_REQUESTED -> handleMarkChatRead(event)
@@ -42,6 +44,45 @@ class MobileWearSyncService : WearableListenerService() {
     override fun onDestroy() {
         serviceScope.cancel()
         super.onDestroy()
+    }
+
+    private fun handleChatListSyncRequest() {
+        serviceScope.launch {
+            runCatching {
+                val repository = ChatRepositoryProvider.current()
+                val latestChats = repository.getChats()
+                MobileWearSyncClient.sendChatListUpdated(
+                    context = this@MobileWearSyncService,
+                    event = WearSyncEvent.ChatListUpdated(chats = latestChats),
+                )
+            }.onSuccess {
+                Log.d(TAG, "Chat list sync request handled")
+            }.onFailure { error ->
+                Log.w(TAG, "Failed to handle chat list sync request: ${error.message}")
+            }
+        }
+    }
+
+    private fun handleChatMessagesSyncRequest(event: WearSyncEvent) {
+        val request = event as? WearSyncEvent.ChatMessagesSyncRequested ?: return
+
+        serviceScope.launch {
+            runCatching {
+                val repository = ChatRepositoryProvider.current()
+                val latestMessages = repository.getMessages(request.chatId)
+                MobileWearSyncClient.sendChatMessagesUpdated(
+                    context = this@MobileWearSyncService,
+                    event = WearSyncEvent.ChatMessagesUpdated(
+                        chatId = request.chatId,
+                        messages = latestMessages,
+                    ),
+                )
+            }.onSuccess {
+                Log.d(TAG, "Chat messages sync request handled: chatId=${request.chatId}")
+            }.onFailure { error ->
+                Log.w(TAG, "Failed to handle chat messages sync request: ${error.message}")
+            }
+        }
     }
 
     private fun handleQuickReply(event: WearSyncEvent) {
