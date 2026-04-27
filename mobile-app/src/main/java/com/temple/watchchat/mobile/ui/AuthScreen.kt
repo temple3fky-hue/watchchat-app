@@ -17,25 +17,72 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.temple.watchchat.mobile.data.AuthRepository
+import com.temple.watchchat.mobile.data.AuthResult
+import kotlinx.coroutines.launch
 
 @Composable
 fun AuthScreen(
     onAuthSuccess: () -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
     var isRegisterMode by remember { mutableStateOf(false) }
     var displayName by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var authMessage by remember { mutableStateOf<String?>(null) }
 
-    val canSubmit = email.trim().isNotEmpty() &&
+    val canSubmit = !isLoading &&
+        email.trim().isNotEmpty() &&
         password.trim().length >= 6 &&
         (!isRegisterMode || displayName.trim().isNotEmpty())
+
+    fun submitAuth() {
+        if (!canSubmit) return
+
+        isLoading = true
+        authMessage = null
+
+        scope.launch {
+            val result = if (isRegisterMode) {
+                AuthRepository.signUp(
+                    displayName = displayName.trim(),
+                    email = email.trim(),
+                    password = password,
+                )
+            } else {
+                AuthRepository.signIn(
+                    email = email.trim(),
+                    password = password,
+                )
+            }
+
+            isLoading = false
+
+            when (result) {
+                is AuthResult.Success -> {
+                    authMessage = if (result.isFakeAuth) {
+                        "未配置 Supabase，已使用本地假登录进入。"
+                    } else {
+                        null
+                    }
+                    onAuthSuccess()
+                }
+
+                is AuthResult.Error -> {
+                    authMessage = result.message
+                }
+            }
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -68,6 +115,7 @@ fun AuthScreen(
                     onValueChange = { displayName = it },
                     label = { Text(text = "昵称") },
                     singleLine = true,
+                    enabled = !isLoading,
                 )
                 Spacer(modifier = Modifier.size(12.dp))
             }
@@ -78,6 +126,7 @@ fun AuthScreen(
                 onValueChange = { email = it },
                 label = { Text(text = "邮箱") },
                 singleLine = true,
+                enabled = !isLoading,
             )
 
             Spacer(modifier = Modifier.size(12.dp))
@@ -89,21 +138,30 @@ fun AuthScreen(
                 label = { Text(text = "密码，至少 6 位") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
+                enabled = !isLoading,
             )
 
             Spacer(modifier = Modifier.size(20.dp))
 
             Button(
                 modifier = Modifier.fillMaxWidth(),
-                onClick = onAuthSuccess,
+                onClick = { submitAuth() },
                 enabled = canSubmit,
             ) {
-                Text(text = if (isRegisterMode) "注册并进入" else "登录")
+                Text(
+                    text = when {
+                        isLoading -> "处理中..."
+                        isRegisterMode -> "注册并进入"
+                        else -> "登录"
+                    },
+                )
             }
 
             TextButton(
+                enabled = !isLoading,
                 onClick = {
                     isRegisterMode = !isRegisterMode
+                    authMessage = null
                 },
             ) {
                 Text(
@@ -118,9 +176,13 @@ fun AuthScreen(
             Spacer(modifier = Modifier.size(12.dp))
 
             Text(
-                text = "当前为假登录页面，后续接入 Supabase Auth。",
+                text = authMessage ?: "配置 Supabase 后会使用真实 Auth；未配置时走本地假登录。",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (authMessage == null) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.error
+                },
             )
         }
     }
