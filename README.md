@@ -1,8 +1,8 @@
-# WatchChat / 腕聊
+#WatchChat/聊天
 
-[![Android Debug Build](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml/badge.svg)](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml)
+[![Android调试生成](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml/badge.svg)](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml)
 
-WatchChat 是一个面向 Android 手机和 Wear OS 手表的简易聊天 App。
+WatchChat是一个面向安卓手机和wear OS手表的简易聊天App.
 
 第一版目标：手机端完成账号登录、聊天列表、文字聊天；手表端完成最近聊天、消息查看、快捷回复、语音输入转文字和震动提醒。
 
