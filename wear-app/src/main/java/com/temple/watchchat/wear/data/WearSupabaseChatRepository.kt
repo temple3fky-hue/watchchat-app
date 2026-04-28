@@ -8,6 +8,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 object WearSupabaseChatRepository {
+    /**
+     * 第一阶段只读取最近聊天列表。
+     *
+     * 依赖手表端本地已恢复的 Supabase Auth Session；
+     * 未配置 / 未登录 / 查询失败时返回空列表，由上层回退到本地假数据。
+     */
     suspend fun getRecentChats(): List<Chat> {
         val client = WearSupabaseClientProvider.client ?: return emptyList()
         val currentUserId = client.auth.currentSessionOrNull()?.user?.id ?: return emptyList()
