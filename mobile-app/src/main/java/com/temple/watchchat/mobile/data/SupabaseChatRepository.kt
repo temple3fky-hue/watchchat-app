@@ -101,6 +101,16 @@ object SupabaseChatRepository : ChatRepository {
                 null
             }
 
+            if (otherProfile != null && otherProfile.id != currentUserId) {
+                val existingChat = findExistingDirectChat(
+                    currentUserId = currentUserId,
+                    otherProfile = otherProfile,
+                )
+                if (existingChat != null) {
+                    return@runCatching existingChat
+                }
+            }
+
             val createdChat = client.from("chats")
                 .insert(
                     ChatInsertDto(
@@ -151,6 +161,59 @@ object SupabaseChatRepository : ChatRepository {
         }.getOrElse { error ->
             failedChat(cleanTitle, error.message ?: "创建失败")
         }
+    }
+
+    private suspend fun findExistingDirectChat(
+        currentUserId: String,
+        otherProfile: ProfileDto,
+    ): Chat? {
+        val client = SupabaseClientProvider.client ?: return null
+
+        val myMemberships = client.from("chat_members")
+            .select()
+            .decodeList<ChatMemberDto>()
+            .filter { member -> member.userId == currentUserId }
+
+        val myChatIds = myMemberships.map { member -> member.chatId }.toSet()
+        if (myChatIds.isEmpty()) return null
+
+        val allMembers = client.from("chat_members")
+            .select()
+            .decodeList<ChatMemberDto>()
+            .filter { member -> member.chatId in myChatIds }
+
+        val existingChatId = allMembers
+            .groupBy { member -> member.chatId }
+            .entries
+            .firstOrNull { entry ->
+                val userIds = entry.value.map { member -> member.userId }.toSet()
+                currentUserId in userIds && otherProfile.id in userIds
+            }
+            ?.key
+            ?: return null
+
+        val existingChatDto = client.from("chats")
+            .select()
+            .decodeList<ChatDto>()
+            .firstOrNull { chat -> chat.id == existingChatId }
+            ?: return null
+
+        val latestMessage = client.from("messages")
+            .select()
+            .decodeList<MessageDto>()
+            .filter { message -> message.chatId == existingChatId }
+            .maxByOrNull { message -> message.createdAt ?: "" }
+
+        return Chat(
+            id = existingChatDto.id,
+            title = existingChatDto.title.ifBlank {
+                otherProfile.displayName.ifBlank { otherProfile.email }
+            },
+            participantIds = listOf(currentUserId, otherProfile.id),
+            lastMessagePreview = latestMessage?.previewText() ?: "继续聊天",
+            unreadCount = 0,
+            updatedAtMillis = System.currentTimeMillis(),
+        )
     }
 
     override suspend fun getMessages(chatId: String): List<Message> {
