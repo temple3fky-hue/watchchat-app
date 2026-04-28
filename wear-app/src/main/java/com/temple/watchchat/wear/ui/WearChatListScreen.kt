@@ -28,6 +28,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,20 +41,41 @@ import androidx.compose.ui.unit.dp
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.sync.WearSyncEvent
 import com.temple.watchchat.wear.data.WearFakeChatRepository
+import com.temple.watchchat.wear.data.WearSupabaseChatRepository
+import com.temple.watchchat.wear.data.WearSupabaseClientProvider
 import com.temple.watchchat.wear.sync.WearSyncClient
+import kotlinx.coroutines.launch
 
 @Composable
 fun WearChatListScreen(
     onChatClick: (Chat) -> Unit,
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val changeVersion by WearFakeChatRepository.changeVersion.collectAsState()
     var chats by remember { mutableStateOf(WearFakeChatRepository.getRecentChats()) }
-    var statusText by remember { mutableStateOf("正在同步手机聊天...") }
+    var statusText by remember { mutableStateOf("正在加载聊天...") }
+
+    fun refreshFromSupabase() {
+        coroutineScope.launch {
+            val remoteChats = WearSupabaseChatRepository.getRecentChats()
+            if (remoteChats.isNotEmpty()) {
+                WearFakeChatRepository.replaceChats(remoteChats)
+                statusText = "最近聊天（Supabase）"
+            } else {
+                statusText = when {
+                    !WearSupabaseClientProvider.isConfigured -> "未配置 Supabase，已显示本地聊天"
+                    chats.isNotEmpty() -> "最近聊天（本地/手机同步）"
+                    else -> "暂无聊天"
+                }
+            }
+        }
+    }
 
     fun requestPhoneSync() {
         statusText = "正在同步手机聊天..."
         WearSyncClient.sendChatListSyncRequested(context)
+        refreshFromSupabase()
     }
 
     LaunchedEffect(Unit) {
@@ -63,7 +85,7 @@ fun WearChatListScreen(
     LaunchedEffect(changeVersion) {
         chats = WearFakeChatRepository.getRecentChats()
         statusText = if (chats.isEmpty()) {
-            "暂无同步聊天"
+            "暂无聊天"
         } else {
             "最近聊天"
         }
