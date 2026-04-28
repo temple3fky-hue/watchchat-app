@@ -1,9 +1,19 @@
 package com.temple.watchchat.mobile.data
 
+import android.content.Context
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 
 object AuthRepository {
+    private const val PREFS_NAME = "watchchat_auth"
+    private const val KEY_DEMO_SESSION_ACTIVE = "demo_session_active"
+
+    private var appContext: Context? = null
+
+    fun initialize(context: Context) {
+        appContext = context.applicationContext
+    }
+
     suspend fun signIn(
         email: String,
         password: String,
@@ -65,6 +75,7 @@ object AuthRepository {
     suspend fun signOut(): AuthResult {
         val client = SupabaseClientProvider.client
             ?: return if (SupabaseClientProvider.isDemoModeAllowed) {
+                setDemoSessionActive(false)
                 AuthResult.Success(isFakeAuth = true)
             } else {
                 AuthResult.Error(SupabaseClientProvider.productionConfigError ?: "Supabase 未配置。")
@@ -72,6 +83,7 @@ object AuthRepository {
 
         return runCatching {
             client.auth.signOut()
+            setDemoSessionActive(false)
             AuthResult.Success(isFakeAuth = false)
         }.fold(
             onSuccess = { result -> result },
@@ -80,21 +92,39 @@ object AuthRepository {
     }
 
     suspend fun hasActiveSession(): Boolean {
-        val client = SupabaseClientProvider.client ?: return false
+        val client = SupabaseClientProvider.client
+            ?: return SupabaseClientProvider.isDemoModeAllowed && isDemoSessionActive()
         return client.auth.currentSessionOrNull() != null
     }
 
     suspend fun currentUserId(): String? {
-        val client = SupabaseClientProvider.client ?: return if (SupabaseClientProvider.isDemoModeAllowed) "me" else null
+        val client = SupabaseClientProvider.client
+            ?: return if (SupabaseClientProvider.isDemoModeAllowed && isDemoSessionActive()) "me" else null
         return client.auth.currentSessionOrNull()?.user?.id
     }
 
     private fun missingConfigOrDemoSuccess(): AuthResult {
         return if (SupabaseClientProvider.isDemoModeAllowed) {
+            setDemoSessionActive(true)
             AuthResult.Success(isFakeAuth = true)
         } else {
             AuthResult.Error(SupabaseClientProvider.productionConfigError ?: "正式模式需要配置 Supabase。")
         }
+    }
+
+    private fun isDemoSessionActive(): Boolean {
+        return appContext
+            ?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            ?.getBoolean(KEY_DEMO_SESSION_ACTIVE, false)
+            ?: false
+    }
+
+    private fun setDemoSessionActive(isActive: Boolean) {
+        appContext
+            ?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            ?.edit()
+            ?.putBoolean(KEY_DEMO_SESSION_ACTIVE, isActive)
+            ?.apply()
     }
 }
 
