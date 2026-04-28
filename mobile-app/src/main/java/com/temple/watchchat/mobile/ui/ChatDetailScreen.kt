@@ -48,6 +48,7 @@ fun ChatDetailScreen(
     var inputText by remember(chat.id) { mutableStateOf("") }
     var isLoading by remember(chat.id) { mutableStateOf(true) }
     var isSending by remember(chat.id) { mutableStateOf(false) }
+    var sendErrorText by remember(chat.id) { mutableStateOf<String?>(null) }
     var refreshText by remember(chat.id) { mutableStateOf("聊天详情") }
     var currentUserId by remember { mutableStateOf("me") }
 
@@ -80,6 +81,7 @@ fun ChatDetailScreen(
         val content = inputText.trim()
         if (content.isEmpty() || isSending) return
 
+        sendErrorText = null
         isSending = true
         scope.launch {
             val sentMessage = ChatRepositoryProvider.current().sendTextMessage(
@@ -87,7 +89,11 @@ fun ChatDetailScreen(
                 content = content,
             )
             messages.add(sentMessage)
-            inputText = ""
+            if (sentMessage.status == MessageStatus.FAILED) {
+                sendErrorText = "发送失败，请检查网络后重试"
+            } else {
+                inputText = ""
+            }
             isSending = false
         }
     }
@@ -158,6 +164,15 @@ fun ChatDetailScreen(
                     Text(text = if (isSending) "发送中" else "发送")
                 }
             }
+
+            sendErrorText?.let { errorText ->
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(
+                    text = errorText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
     }
 }
@@ -200,6 +215,11 @@ private fun MessageBubble(
                     color = textColor,
                 )
                 if (isMine) {
+                    val statusColor = if (message.status == MessageStatus.FAILED) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        textColor
+                    }
                     Text(
                         text = when (message.status) {
                             MessageStatus.SENDING -> "发送中"
@@ -208,7 +228,7 @@ private fun MessageBubble(
                             MessageStatus.READ -> "已读"
                         },
                         style = MaterialTheme.typography.labelSmall,
-                        color = textColor,
+                        color = statusColor,
                     )
                 }
             }
