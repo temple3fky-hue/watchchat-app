@@ -6,6 +6,7 @@ import com.temple.watchchat.shared.model.MessageStatus
 import com.temple.watchchat.shared.model.MessageType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
@@ -20,6 +21,8 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 
 object SupabaseChatRepository : ChatRepository {
     override suspend fun getChats(): List<Chat> {
@@ -256,8 +259,12 @@ object SupabaseChatRepository : ChatRepository {
                 runCatching {
                     channel.postgresChangeFlow<PostgresAction>(schema = "public") {
                         table = "messages"
-                    }.collect {
-                        trySend(Unit).isSuccess
+                        filter(column = "chat_id", operator = FilterOperator.EQ, value = targetChatId)
+                    }.collect { action ->
+                        val changedChatId = extractChatId(action)
+                        if (changedChatId == targetChatId) {
+                            trySend(Unit).isSuccess
+                        }
                     }
                 }.onFailure {
                     close(it)
@@ -280,6 +287,18 @@ object SupabaseChatRepository : ChatRepository {
                 runCatching { channel.unsubscribe() }
             }
         }.buffer(Channel.CONFLATED)
+    }
+
+
+    private fun extractChatId(action: PostgresAction): String? {
+        val payload = when (action) {
+            is PostgresAction.Insert -> action.record
+            is PostgresAction.Update -> action.record
+            is PostgresAction.Select -> action.record
+            is PostgresAction.Delete -> action.oldRecord
+        } ?: return null
+
+        return payload["chat_id"]?.jsonPrimitive?.contentOrNull
     }
 
     override suspend fun sendTextMessage(
