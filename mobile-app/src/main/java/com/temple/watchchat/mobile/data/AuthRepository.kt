@@ -22,6 +22,7 @@ object AuthRepository {
             ?: return missingConfigOrDemoSuccess()
 
         return runCatching {
+            client.auth.awaitInitialization()
             client.auth.signInWith(Email) {
                 this.email = email
                 this.password = password
@@ -47,6 +48,7 @@ object AuthRepository {
             ?: return missingConfigOrDemoSuccess()
 
         return runCatching {
+            client.auth.awaitInitialization()
             val cleanEmail = email.trim()
             val cleanDisplayName = displayName.trim()
 
@@ -82,6 +84,7 @@ object AuthRepository {
             }
 
         return runCatching {
+            client.auth.awaitInitialization()
             client.auth.signOut()
             setDemoSessionActive(false)
             AuthResult.Success(isFakeAuth = false)
@@ -94,12 +97,16 @@ object AuthRepository {
     suspend fun hasActiveSession(): Boolean {
         val client = SupabaseClientProvider.client
             ?: return SupabaseClientProvider.isDemoModeAllowed && isDemoSessionActive()
+
+        client.auth.awaitInitialization()
         return client.auth.currentSessionOrNull() != null
     }
 
     suspend fun currentUserId(): String? {
         val client = SupabaseClientProvider.client
             ?: return if (SupabaseClientProvider.isDemoModeAllowed && isDemoSessionActive()) "me" else null
+
+        client.auth.awaitInitialization()
         return client.auth.currentSessionOrNull()?.user?.id
     }
 
