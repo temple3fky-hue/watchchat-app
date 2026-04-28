@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.item
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Badge
@@ -100,7 +99,7 @@ fun ChatListScreen(
                 title = title,
                 otherUserEmail = email,
             )
-            val updatedChats = listOf(newChat) + chats
+            val updatedChats = listOf(newChat) + chats.filterNot { it.id == newChat.id }
             chats = updatedChats
             syncChatsToWear(updatedChats)
             newChatTitle = ""
@@ -147,6 +146,18 @@ fun ChatListScreen(
             val result = FriendRepositoryProvider.current().rejectRequest(requestId)
             friendStatus = result.message
             reloadFriends()
+            isFriendBusy = false
+        }
+    }
+
+    fun refreshFriendsAndChats() {
+        if (isFriendBusy) return
+        isFriendBusy = true
+        friendStatus = "正在刷新好友和申请..."
+        scope.launch {
+            reloadFriends()
+            reloadChats()
+            friendStatus = "已刷新"
             isFriendBusy = false
         }
     }
@@ -207,6 +218,7 @@ fun ChatListScreen(
                         statusText = friendStatus,
                         enabled = !isFriendBusy,
                         onSendClick = { sendFriendRequest() },
+                        onRefreshClick = { refreshFriendsAndChats() },
                     )
                 }
 
@@ -325,6 +337,7 @@ private fun AddFriendPanel(
     statusText: String,
     enabled: Boolean,
     onSendClick: () -> Unit,
+    onRefreshClick: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -360,11 +373,23 @@ private fun AddFriendPanel(
                 }
             }
             Spacer(modifier = Modifier.size(6.dp))
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    modifier = Modifier.weight(1f),
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(
+                    onClick = onRefreshClick,
+                    enabled = enabled,
+                ) {
+                    Text(text = "刷新")
+                }
+            }
         }
     }
 }
