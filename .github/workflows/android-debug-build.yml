@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-debug-apks:
-    name: Build mobile and wear debug APKs
+  build-debug-apk:
+    name: Build mobile debug APK
     runs-on: ubuntu-latest
 
     steps:
@@ -44,22 +44,15 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build debug APKs
+      - name: Build mobile debug APK
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: ./gradlew :mobile-app:assembleDebug :wear-app:assembleDebug --stacktrace -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" -PWATCHCHAT_ALLOW_DEMO_MODE=false
+        run: ./gradlew :mobile-app:assembleDebug --stacktrace -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" -PWATCHCHAT_ALLOW_DEMO_MODE=false
 
       - name: Upload mobile debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-app-debug-apk
+          name: watchchat-mobile-debug-apk
           path: mobile-app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-
-      - name: Upload wear debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: wear-app-debug-apk
-          path: wear-app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
