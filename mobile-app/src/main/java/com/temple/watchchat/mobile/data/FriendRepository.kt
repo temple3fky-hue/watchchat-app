@@ -17,6 +17,8 @@ interface FriendRepository {
 
     suspend fun getIncomingRequests(): List<FriendRequest>
 
+    suspend fun getFriendNotice(): String?
+
     suspend fun sendFriendRequest(email: String): FriendActionResult
 
     suspend fun acceptRequest(requestId: String): FriendActionResult
@@ -134,6 +136,19 @@ private object SupabaseFriendRepository : FriendRepository {
         }
     }
 
+    override suspend fun getFriendNotice(): String? {
+        val client = SupabaseClientProvider.client ?: return "Supabase 未配置"
+
+        return runCatching {
+            client.from("friendships")
+                .select()
+                .decodeList<FriendshipDto>()
+            null
+        }.getOrElse { error ->
+            mapFriendErrorMessage(error, fallback = "好友功能暂时不可用")
+        }
+    }
+
     override suspend fun sendFriendRequest(email: String): FriendActionResult {
         val client = SupabaseClientProvider.client
             ?: return FriendActionResult(false, "Supabase 未配置")
@@ -187,7 +202,10 @@ private object SupabaseFriendRepository : FriendRepository {
 
             FriendActionResult(true, "好友申请已发送")
         }.getOrElse { error ->
-            FriendActionResult(false, "发送失败：${error.message ?: "未知错误"}")
+            FriendActionResult(
+                success = false,
+                message = mapFriendErrorMessage(error, fallback = "发送好友申请失败"),
+            )
         }
     }
 
@@ -236,7 +254,30 @@ private object SupabaseFriendRepository : FriendRepository {
 
             FriendActionResult(true, successMessage)
         }.getOrElse { error ->
-            FriendActionResult(false, "操作失败：${error.message ?: "未知错误"}")
+            FriendActionResult(
+                success = false,
+                message = mapFriendErrorMessage(error, fallback = "处理好友申请失败"),
+            )
+        }
+    }
+
+    private fun mapFriendErrorMessage(
+        error: Throwable,
+        fallback: String,
+    ): String {
+        val raw = error.message.orEmpty().lowercase()
+        return if (
+            "friendships" in raw &&
+            (
+                "does not exist" in raw ||
+                    "42p01" in raw ||
+                    "not found" in raw ||
+                    "relation" in raw
+                )
+        ) {
+            "未检测到 friendships 表，请先在 Supabase 中创建好友关系表。"
+        } else {
+            fallback
         }
     }
 }
@@ -245,6 +286,8 @@ private object LocalFriendRepository : FriendRepository {
     override suspend fun getFriends(): List<FriendUser> = emptyList()
 
     override suspend fun getIncomingRequests(): List<FriendRequest> = emptyList()
+
+    override suspend fun getFriendNotice(): String? = "本地模式暂不支持好友功能，请配置 Supabase"
 
     override suspend fun sendFriendRequest(email: String): FriendActionResult {
         return FriendActionResult(false, "本地模式暂不支持好友功能，请配置 Supabase")
