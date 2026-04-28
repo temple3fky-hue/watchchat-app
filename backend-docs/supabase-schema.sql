@@ -1,6 +1,6 @@
 -- WatchChat Supabase schema
 -- 在 Supabase SQL Editor 中执行本文件。
--- 目标：账号资料、一对一聊天、文字消息、后续语音消息。
+-- 目标：账号资料、好友申请、一对一聊天、文字消息、后续语音消息。
 
 create extension if not exists pgcrypto;
 
@@ -11,6 +11,26 @@ create table if not exists public.profiles (
   avatar_url text,
   created_at timestamptz not null default now()
 );
+
+create table if not exists public.friendships (
+  id uuid primary key default gen_random_uuid(),
+  requester_id uuid not null references auth.users(id) on delete cascade,
+  addressee_id uuid not null references auth.users(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'rejected')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check (requester_id <> addressee_id)
+);
+
+create unique index if not exists idx_friendships_unique_pair
+on public.friendships (
+  least(requester_id, addressee_id),
+  greatest(requester_id, addressee_id)
+);
+
+create index if not exists idx_friendships_requester_id on public.friendships(requester_id);
+create index if not exists idx_friendships_addressee_id on public.friendships(addressee_id);
+create index if not exists idx_friendships_status on public.friendships(status);
 
 create table if not exists public.chats (
   id uuid primary key default gen_random_uuid(),
@@ -61,6 +81,21 @@ create trigger trg_messages_touch_chat_updated_at
 after insert on public.messages
 for each row execute function public.touch_chat_updated_at();
 
+create or replace function public.touch_friendship_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_friendships_touch_updated_at on public.friendships;
+create trigger trg_friendships_touch_updated_at
+before update on public.friendships
+for each row execute function public.touch_friendship_updated_at();
+
 -- SECURITY DEFINER 避免 RLS 策略在 chat_members 上自查时出现 infinite recursion。
 create or replace function public.is_chat_member(
   p_chat_id uuid,
@@ -83,6 +118,7 @@ $$;
 grant execute on function public.is_chat_member(uuid, uuid) to authenticated;
 
 alter table public.profiles enable row level security;
+alter table public.friendships enable row level security;
 alter table public.chats enable row level security;
 alter table public.chat_members enable row level security;
 alter table public.messages enable row level security;
@@ -104,6 +140,37 @@ create policy "profiles_update_own"
 on public.profiles for update
 using (auth.uid() = id)
 with check (auth.uid() = id);
+
+-- friendships
+
+drop policy if exists "friendships_select_own" on public.friendships;
+create policy "friendships_select_own"
+on public.friendships for select
+using (
+  requester_id = auth.uid()
+  or addressee_id = auth.uid()
+);
+
+drop policy if exists "friendships_insert_requester" on public.friendships;
+create policy "friendships_insert_requester"
+on public.friendships for insert
+with check (
+  requester_id = auth.uid()
+  and requester_id <> addressee_id
+  and status = 'pending'
+);
+
+drop policy if exists "friendships_update_own" on public.friendships;
+create policy "friendships_update_own"
+on public.friendships for update
+using (
+  requester_id = auth.uid()
+  or addressee_id = auth.uid()
+)
+with check (
+  requester_id = auth.uid()
+  or addressee_id = auth.uid()
+);
 
 -- chats
 
