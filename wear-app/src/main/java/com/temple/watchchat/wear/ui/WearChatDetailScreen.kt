@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,8 +42,11 @@ import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
 import com.temple.watchchat.shared.sync.WearSyncEvent
 import com.temple.watchchat.wear.data.WearFakeChatRepository
+import com.temple.watchchat.wear.data.WearSupabaseChatRepository
+import com.temple.watchchat.wear.data.WearSupabaseClientProvider
 import com.temple.watchchat.wear.sync.WearSyncClient
 import com.temple.watchchat.wear.util.WearVibration
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 @Composable
@@ -51,6 +55,7 @@ fun WearChatDetailScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val changeVersion by WearFakeChatRepository.changeVersion.collectAsState()
     val messages = remember(chat.id) { mutableStateListOf<Message>() }
     var statusText by remember(chat.id) { mutableStateOf("正在同步消息...") }
@@ -65,12 +70,33 @@ fun WearChatDetailScreen(
 
     LaunchedEffect(chat.id) {
         requestMessagesSync()
+        refreshMessagesFromSupabase()
     }
 
     LaunchedEffect(chat.id, changeVersion) {
         messages.clear()
         messages.addAll(WearFakeChatRepository.getMessages(chat.id))
-        statusText = if (messages.isEmpty()) "暂无消息" else "消息"
+        statusText = when {
+            messages.isEmpty() -> "暂无消息"
+            !WearSupabaseClientProvider.isConfigured -> "消息（本地）"
+            else -> "消息"
+        }
+    }
+
+    fun refreshMessagesFromSupabase() {
+        coroutineScope.launch {
+            val remoteMessages = WearSupabaseChatRepository.getMessages(chat.id)
+            if (remoteMessages != null) {
+                WearFakeChatRepository.replaceMessages(chat.id, remoteMessages)
+                statusText = "消息（Supabase）"
+            } else {
+                statusText = if (messages.isEmpty()) {
+                    "消息（本地）"
+                } else {
+                    "消息（本地/手机同步）"
+                }
+            }
+        }
     }
 
     fun sendQuickReply(
@@ -217,7 +243,10 @@ fun WearChatDetailScreen(
 
             Spacer(modifier = Modifier.size(6.dp))
 
-            Button(onClick = { requestMessagesSync() }) {
+            Button(onClick = {
+                requestMessagesSync()
+                refreshMessagesFromSupabase()
+            }) {
                 Text(
                     text = "同步消息",
                     style = MaterialTheme.typography.labelSmall,

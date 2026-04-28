@@ -1,6 +1,9 @@
 package com.temple.watchchat.wear.data
 
 import com.temple.watchchat.shared.model.Chat
+import com.temple.watchchat.shared.model.Message
+import com.temple.watchchat.shared.model.MessageStatus
+import com.temple.watchchat.shared.model.MessageType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import java.time.Instant
@@ -81,6 +84,32 @@ object WearSupabaseChatRepository {
             emptyList()
         }
     }
+
+    /**
+     * 第一阶段：只读取消息列表。
+     *
+     * 返回 null 代表需要上层回退到本地假消息：
+     * - Supabase 未配置
+     * - 没有 Auth Session
+     * - 查询/解析失败
+     *
+     * 返回非 null（包括空列表）表示读取成功。
+     */
+    suspend fun getMessages(chatId: String): List<Message>? {
+        val client = WearSupabaseClientProvider.client ?: return null
+        val targetChatId = chatId.trim()
+        if (targetChatId.isBlank()) return emptyList()
+        if (client.auth.currentSessionOrNull()?.user?.id == null) return null
+
+        return runCatching {
+            client.from("messages")
+                .select()
+                .decodeList<MessageDetailDto>()
+                .filter { message -> message.chatId == targetChatId }
+                .sortedBy { message -> message.createdAt ?: "" }
+                .map { message -> message.toMessage() }
+        }.getOrNull()
+    }
 }
 
 private fun String?.toEpochMillis(): Long? {
@@ -123,3 +152,35 @@ private data class MessageDto(
     @SerialName("created_at")
     val createdAt: String? = null,
 )
+
+@Serializable
+private data class MessageDetailDto(
+    val id: String,
+    @SerialName("chat_id")
+    val chatId: String,
+    @SerialName("sender_id")
+    val senderId: String,
+    val content: String = "",
+    @SerialName("message_type")
+    val messageType: String = "text",
+    val status: String = "sent",
+    @SerialName("created_at")
+    val createdAt: String? = null,
+) {
+    fun toMessage(): Message {
+        return Message(
+            id = id,
+            chatId = chatId,
+            senderId = senderId,
+            content = content,
+            type = if (messageType == "voice") MessageType.VOICE else MessageType.TEXT,
+            status = when (status) {
+                "sending" -> MessageStatus.SENDING
+                "failed" -> MessageStatus.FAILED
+                "read" -> MessageStatus.READ
+                else -> MessageStatus.SENT
+            },
+            createdAtMillis = createdAt.toEpochMillis() ?: 0L,
+        )
+    }
+}
