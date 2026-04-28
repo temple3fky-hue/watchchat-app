@@ -10,8 +10,11 @@ import io.github.jan.supabase.postgrest.query.filter.FilterOperator
 import io.github.jan.supabase.realtime.PostgresAction
 import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
+import io.github.jan.supabase.realtime.realtime
 import java.time.Instant
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +26,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+
+private const val REALTIME_RETRY_DELAY_MILLIS = 3_000L
 
 object SupabaseChatRepository : ChatRepository {
     override suspend fun getChats(): List<Chat> {
@@ -250,45 +255,50 @@ object SupabaseChatRepository : ChatRepository {
 
         return callbackFlow {
             val channelName = "messages-$currentUserId-$targetChatId-${System.currentTimeMillis()}"
-            val channel = runCatching { client.channel(channelName) }.getOrElse {
-                close(it)
+            val realtimeChannel = runCatching { client.channel(channelName) }.getOrElse {
+                close()
                 return@callbackFlow
             }
 
             val realtimeJob: Job = launch {
-                runCatching {
-                    channel.postgresChangeFlow<PostgresAction>(schema = "public") {
-                        table = "messages"
-                        filter(column = "chat_id", operator = FilterOperator.EQ, value = targetChatId)
-                    }.collect { action ->
-                        val changedChatId = extractChatId(action)
-                        if (changedChatId == targetChatId) {
-                            trySend(Unit).isSuccess
+                while (isActive) {
+                    runCatching {
+                        realtimeChannel.postgresChangeFlow<PostgresAction>(schema = "public") {
+                            table = "messages"
+                            filter(column = "chat_id", operator = FilterOperator.EQ, value = targetChatId)
+                        }.collect { action ->
+                            val changedChatId = extractChatId(action)
+                            if (changedChatId == targetChatId) {
+                                trySend(Unit).isSuccess
+                            }
                         }
                     }
-                }.onFailure {
-                    close(it)
+
+                    if (isActive) {
+                        delay(REALTIME_RETRY_DELAY_MILLIS)
+                    }
                 }
             }
 
             val subscribed = runCatching {
-                channel.subscribe(blockUntilSubscribed = true)
+                realtimeChannel.subscribe(blockUntilSubscribed = true)
             }.isSuccess
 
             if (!subscribed) {
                 realtimeJob.cancel()
-                runCatching { channel.unsubscribe() }
+                runCatching { client.realtime.removeChannel(realtimeChannel) }
                 close()
                 return@callbackFlow
             }
 
             awaitClose {
                 realtimeJob.cancel()
-                runCatching { channel.unsubscribe() }
+                launch {
+                    runCatching { client.realtime.removeChannel(realtimeChannel) }
+                }
             }
         }.buffer(Channel.CONFLATED)
     }
-
 
     private fun extractChatId(action: PostgresAction): String? {
         val payload = when (action) {
@@ -296,7 +306,7 @@ object SupabaseChatRepository : ChatRepository {
             is PostgresAction.Update -> action.record
             is PostgresAction.Select -> action.record
             is PostgresAction.Delete -> action.oldRecord
-        } ?: return null
+        }
 
         return payload["chat_id"]?.jsonPrimitive?.contentOrNull
     }
