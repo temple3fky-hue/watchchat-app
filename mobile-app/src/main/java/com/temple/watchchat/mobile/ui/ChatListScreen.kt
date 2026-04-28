@@ -80,8 +80,13 @@ fun ChatListScreen(
     }
 
     suspend fun reloadFriends() {
-        friends = FriendRepositoryProvider.current().getFriends()
-        incomingRequests = FriendRepositoryProvider.current().getIncomingRequests()
+        val repository = FriendRepositoryProvider.current()
+        friends = repository.getFriends()
+        incomingRequests = repository.getIncomingRequests()
+        val notice = repository.getFriendNotice()
+        if (!notice.isNullOrBlank()) {
+            friendStatus = notice
+        }
     }
 
     fun createChat(
