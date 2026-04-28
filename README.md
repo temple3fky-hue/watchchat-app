@@ -1,32 +1,48 @@
-#WatchChat/聊天
+# WatchChat 聊天 App
 
-[![Android调试生成](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml/badge.svg)](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml)
+[![Android 调试构建](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml/badge.svg)](https://github.com/temple3fky-hue/watchchat-app/actions/workflows/android-debug-build.yml)
 
-WatchChat是一个面向安卓手机和wear OS手表的简易聊天App.
+WatchChat 是一个面向 **Android 手机** 和 **Wear OS 手表** 的轻量聊天 App。项目目标是先完成可运行的聊天基础版本，再逐步接入 Supabase 实时同步、语音消息和手表联动。
 
-第一版目标：手机端完成账号登录、聊天列表、文字聊天；手表端完成最近聊天、消息查看、快捷回复、语音输入转文字和震动提醒。
+## 当前状态
+
+```text
+手机端：登录 / 注册 / 聊天列表 / 新建聊天 / 文字消息
+手表端：最近聊天 / 消息查看 / 快捷回复 / 语音输入 / 震动提醒
+后端：Supabase 表结构、RLS 策略和基础仓库代码
+构建：GitHub Actions Debug APK 自动构建
+```
+
+最近已整理：
+
+- 登录页文案改为“登录你的聊天账号”。
+- 本地假登录支持持久化，杀后台后不会自动掉登录。
+- Supabase Auth 会等待本地 Session 恢复完成后再判断登录状态。
 
 ## 项目结构
 
 ```text
-watchchat-app
-├── mobile-app      Android 手机端 App
-├── wear-app        Wear OS 手表端 App
-├── shared          公共数据模型
-├── backend-docs    Supabase 配置说明和 SQL
-└── .github         GitHub Actions 自动打包 APK
+watchchat-app/
+├── mobile-app/       Android 手机端 App
+├── wear-app/         Wear OS 手表端 App
+├── shared/           手机端和手表端共用数据模型
+├── backend-docs/     Supabase 数据库和配置文档
+├── .github/          GitHub Actions 自动构建配置
+├── local.properties.example
+├── settings.gradle.kts
+└── README.md
 ```
 
-## 当前已完成功能
+## 功能清单
 
 ### 手机端 mobile-app
 
-- Compose 启动页面
-- 登录 / 注册 UI
+- Compose UI
+- 登录 / 注册页面
 - Supabase Auth 登录 / 注册入口
-- 未配置 Supabase 时自动走本地假登录
-- 注册成功后写入 `profiles` 用户资料表
-- App 启动时自动检查已有登录会话
+- 未配置 Supabase 时使用本地假登录
+- 本地假登录状态持久化
+- App 启动时自动检查登录状态
 - 退出登录
 - 最近聊天列表
 - 新建聊天
@@ -35,9 +51,8 @@ watchchat-app
 - 发送文字消息
 - 本地消息状态更新
 - 聊天列表最后一条消息预览更新
-- Supabase 聊天仓库雏形
-- Supabase `chats` / `chat_members` / `messages` 读取和写入雏形
-- 消息自动刷新，目前使用 3 秒轮询，后续可替换为真正 Realtime channel
+- Supabase 聊天数据读取 / 写入雏形
+- 消息自动刷新，目前使用 3 秒轮询
 
 ### 手表端 wear-app
 
@@ -46,7 +61,7 @@ watchchat-app
 - 消息详情页
 - 快捷回复：好的、收到、等一下、马上、在忙
 - 系统语音输入 Intent
-- 语音识别文字自动作为回复发送
+- 语音识别结果作为文字回复发送
 - 语音输入状态提示
 - 快捷回复成功震动
 - 语音输入点击震动
@@ -57,7 +72,7 @@ watchchat-app
 
 ### shared
 
-公共数据模型：
+共用数据模型：
 
 ```text
 WatchChatUser
@@ -67,16 +82,16 @@ MessageType
 MessageStatus
 ```
 
-### Supabase 后端文档
+### backend-docs
 
-已添加：
+后端文档包含：
 
 ```text
 backend-docs/supabase-schema.sql
 backend-docs/supabase-setup.md
 ```
 
-包含：
+主要内容：
 
 - `profiles` 用户资料表
 - `chats` 聊天表
@@ -86,7 +101,7 @@ backend-docs/supabase-setup.md
 - Realtime 开启说明
 - `voice-messages` Storage bucket 规划
 
-## 运行方式
+## 快速运行
 
 ### 1. 克隆项目
 
@@ -97,7 +112,7 @@ cd watchchat-app
 
 ### 2. 用 Android Studio 打开
 
-使用 Android Studio 打开项目根目录，然后等待 Gradle 同步完成。
+用 Android Studio 打开项目根目录，等待 Gradle Sync 完成。
 
 ### 3. 运行手机端
 
@@ -107,7 +122,7 @@ cd watchchat-app
 mobile-app
 ```
 
-手机端未配置 Supabase 时也能运行，会自动使用本地假登录和假聊天数据。
+未配置 Supabase 时也能运行，会自动使用本地假登录和假聊天数据。
 
 ### 4. 运行手表端
 
@@ -117,7 +132,7 @@ mobile-app
 wear-app
 ```
 
-手表端目前使用本地假数据，主要用于验证 Wear OS UI、快捷回复、语音输入和震动提醒。
+手表端目前主要用于验证 Wear OS UI、快捷回复、语音输入和震动提醒。
 
 ## Supabase 配置
 
@@ -146,30 +161,34 @@ backend-docs/supabase-schema.sql
 
 ### 3. 配置 Android 本地密钥
 
-复制：
+复制示例文件：
 
-```text
-local.properties.example
+```bash
+cp local.properties.example local.properties
 ```
 
-改名为：
-
-```text
-local.properties
-```
-
-填入：
+填入你的 Supabase 信息：
 
 ```properties
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_ANON_KEY=your-anon-public-key
 ```
 
-注意：不要把 `service_role` key 放进 Android App。
+注意：不要把 `service_role` key 放进 Android App，也不要提交真实的 `local.properties`。
+
+### 4. 本地假登录模式
+
+如果暂时不配置 Supabase，可以在本地 Gradle 属性里开启：
+
+```properties
+WATCHCHAT_ALLOW_DEMO_MODE=true
+```
+
+开启后，登录页会使用本地假登录，方便先调试 UI 和聊天流程。
 
 ## GitHub Actions 自动打包
 
-仓库已添加 Debug APK 自动构建工作流：
+工作流文件：
 
 ```text
 .github/workflows/android-debug-build.yml
@@ -183,39 +202,42 @@ pull request 到 main
 手动 workflow_dispatch
 ```
 
-工作流会构建：
+构建任务：
 
 ```text
 :mobile-app:assembleDebug
 :wear-app:assembleDebug
 ```
 
-构建成功后会上传两个产物：
+构建成功后会上传：
 
 ```text
 mobile-app-debug-apk
 wear-app-debug-apk
 ```
 
-当前仓库暂未提交 Gradle Wrapper，因此 CI 使用 `gradle/actions/setup-gradle` 安装 Gradle 8.10.2 后运行构建。
+## 测试重点
 
-## 当前开发状态
-
-当前项目已经从“项目骨架”推进到：
+每次改登录相关代码后，建议测试：
 
 ```text
-手机端：可登录 / 注册 / 新建聊天 / 发送文字消息
-手表端：可查看聊天 / 快捷回复 / 语音输入 / 震动提醒
-后端：Supabase 表结构和基础仓库代码已搭建
-CI：已添加 Debug APK 自动构建工作流
+1. 打开 App
+2. 登录账号
+3. 进入聊天列表
+4. 从后台划掉 App
+5. 重新打开 App
+6. 确认可以直接进入聊天列表，不会回到登录页
 ```
 
-仍有部分功能是开发版实现：
+每次改聊天相关代码后，建议测试：
 
-- 手机端消息同步目前是 3 秒轮询，不是真正 Realtime channel
-- 手表端数据目前是本地假数据，尚未和手机端或 Supabase 同步
-- 语音消息目前是语音转文字回复，尚未做音频录制、上传和播放
-- 仓库暂未提交 Gradle Wrapper，后续建议补齐 `gradlew` 和 `gradle/wrapper`
+```text
+1. 新建聊天
+2. 进入聊天详情
+3. 发送一条文字消息
+4. 返回聊天列表
+5. 确认最后一条消息预览更新
+```
 
 ## 下一步计划
 
@@ -228,9 +250,7 @@ CI：已添加 Debug APK 自动构建工作流
 7. 优化聊天列表刷新和错误提示
 8. 增加基础测试和构建检查
 
-## 暂不包含
-
-第一版暂时不做：
+## 第一版暂不包含
 
 - 群聊
 - 图片消息
@@ -239,3 +259,10 @@ CI：已添加 Debug APK 自动构建工作流
 - 红包
 - 复杂好友系统
 - 正式应用商店上架
+
+## 开发提醒
+
+- 真实 Supabase 密钥只放在 `local.properties`。
+- 不要提交 `local.properties`。
+- 不要把 `service_role` key 放进 Android App。
+- 修改代码后先运行 `mobile-app`，再检查 GitHub Actions 是否通过。
