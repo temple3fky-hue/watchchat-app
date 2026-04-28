@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * 如果手机端还没有同步数据，则返回空列表，避免显示开发假数据。
  */
 object WearFakeChatRepository {
-    private const val SHOW_DEMO_DATA_WHEN_NO_PHONE_SYNC = false
+    private const val SHOW_DEMO_DATA_WHEN_NO_PHONE_SYNC = true
 
     private val messagesByChatId = mutableMapOf(
         "wear_chat_001" to mutableListOf(
@@ -99,7 +99,7 @@ object WearFakeChatRepository {
                 }
                 .sortedByDescending { chat -> chat.updatedAtMillis }
 
-            SHOW_DEMO_DATA_WHEN_NO_PHONE_SYNC && !hasReceivedPhoneSync -> getDemoChats()
+            SHOW_DEMO_DATA_WHEN_NO_PHONE_SYNC -> getDemoChats()
 
             else -> emptyList()
         }

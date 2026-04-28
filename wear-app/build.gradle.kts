@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -16,6 +17,16 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        val supabaseUrl = project.findProperty("SUPABASE_URL") as? String ?: ""
+        val supabaseAnonKey = project.findProperty("SUPABASE_ANON_KEY") as? String ?: ""
+        val allowDemoMode = (project.findProperty("WATCHCHAT_ALLOW_DEMO_MODE") as? String)
+            ?.toBooleanStrictOrNull()
+            ?: false
+
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+        buildConfigField("Boolean", "ALLOW_DEMO_MODE", allowDemoMode.toString())
     }
 
     compileOptions {
@@ -25,6 +36,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -44,4 +56,9 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     implementation("com.google.android.gms:play-services-wearable:19.0.0")
+
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.0.3"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.ktor:ktor-client-android:3.0.3")
 }
