@@ -6,10 +6,18 @@ import com.temple.watchchat.shared.model.MessageStatus
 import com.temple.watchchat.shared.model.MessageType
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.realtime.PostgresAction
+import io.github.jan.supabase.realtime.channel
+import io.github.jan.supabase.realtime.postgresChangeFlow
 import java.time.Instant
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -232,12 +240,46 @@ object SupabaseChatRepository : ChatRepository {
     }
 
     override fun observeMessageChanges(chatId: String): Flow<Unit> {
-        return flow {
-            while (true) {
-                delay(3_000)
-                emit(Unit)
+        val client = SupabaseClientProvider.client ?: return emptyFlow()
+        val currentUserId = client.auth.currentSessionOrNull()?.user?.id ?: return emptyFlow()
+        val targetChatId = chatId.trim()
+        if (targetChatId.isBlank()) return emptyFlow()
+
+        return callbackFlow {
+            val channelName = "messages-$currentUserId-$targetChatId-${System.currentTimeMillis()}"
+            val channel = runCatching { client.channel(channelName) }.getOrElse {
+                close(it)
+                return@callbackFlow
             }
-        }
+
+            val realtimeJob: Job = launch {
+                runCatching {
+                    channel.postgresChangeFlow<PostgresAction>(schema = "public") {
+                        table = "messages"
+                    }.collect {
+                        trySend(Unit).isSuccess
+                    }
+                }.onFailure {
+                    close(it)
+                }
+            }
+
+            val subscribed = runCatching {
+                channel.subscribe(blockUntilSubscribed = true)
+            }.isSuccess
+
+            if (!subscribed) {
+                realtimeJob.cancel()
+                runCatching { channel.unsubscribe() }
+                close()
+                return@callbackFlow
+            }
+
+            awaitClose {
+                realtimeJob.cancel()
+                runCatching { channel.unsubscribe() }
+            }
+        }.buffer(Channel.CONFLATED)
     }
 
     override suspend fun sendTextMessage(
