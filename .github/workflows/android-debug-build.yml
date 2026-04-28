@@ -8,6 +8,16 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      build_mode:
+        description: "Build variant for manual run"
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - demo
+          - supabase
 
 jobs:
   build-debug-apk:
@@ -30,16 +40,56 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Validate production build config
+      - name: Resolve build config
+        id: build_config
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          BUILD_MODE: ${{ github.event.inputs.build_mode || 'auto' }}
         run: |
-          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "Missing GitHub Actions repository secrets."
+          HAS_SUPABASE_SECRETS=false
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            HAS_SUPABASE_SECRETS=true
+          fi
+
+          case "$BUILD_MODE" in
+            supabase)
+              if [ "$HAS_SUPABASE_SECRETS" != "true" ]; then
+                echo "build_mode=supabase requires SUPABASE_URL and SUPABASE_ANON_KEY secrets."
+                exit 1
+              fi
+              USE_DEMO_MODE=false
+              ;;
+            demo)
+              USE_DEMO_MODE=true
+              ;;
+            auto)
+              if [ "$HAS_SUPABASE_SECRETS" = "true" ]; then
+                USE_DEMO_MODE=false
+              else
+                USE_DEMO_MODE=true
+              fi
+              ;;
+            *)
+              echo "Unsupported build_mode: $BUILD_MODE"
+              exit 1
+              ;;
+          esac
+
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$HAS_SUPABASE_SECRETS" != "true" ]; then
+            echo "Missing GitHub Actions repository secrets for push/pull_request builds."
             echo "Required names: SUPABASE_URL and SUPABASE_ANON_KEY"
             exit 1
           fi
+
+          if [ "$USE_DEMO_MODE" = "true" ]; then
+            echo "BUILD_VARIANT=demo"
+          else
+            echo "BUILD_VARIANT=supabase"
+          fi
+
+          echo "has_supabase_secrets=$HAS_SUPABASE_SECRETS" >> "$GITHUB_OUTPUT"
+          echo "watchchat_allow_demo_mode=$USE_DEMO_MODE" >> "$GITHUB_OUTPUT"
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
@@ -48,7 +98,19 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-        run: ./gradlew :mobile-app:assembleDebug --stacktrace -PSUPABASE_URL="$SUPABASE_URL" -PSUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" -PWATCHCHAT_ALLOW_DEMO_MODE=false
+          WATCHCHAT_ALLOW_DEMO_MODE: ${{ steps.build_config.outputs.watchchat_allow_demo_mode }}
+        run: |
+          GRADLE_ARGS=(
+            ":mobile-app:assembleDebug"
+            "--stacktrace"
+            "-PWATCHCHAT_ALLOW_DEMO_MODE=$WATCHCHAT_ALLOW_DEMO_MODE"
+          )
+
+          if [ "$WATCHCHAT_ALLOW_DEMO_MODE" != "true" ]; then
+            GRADLE_ARGS+=("-PSUPABASE_URL=$SUPABASE_URL" "-PSUPABASE_ANON_KEY=$SUPABASE_ANON_KEY")
+          fi
+
+          ./gradlew "${GRADLE_ARGS[@]}"
 
       - name: Upload mobile debug APK
         uses: actions/upload-artifact@v4
