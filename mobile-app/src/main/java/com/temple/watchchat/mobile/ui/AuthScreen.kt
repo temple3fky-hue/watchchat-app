@@ -112,7 +112,7 @@ fun AuthScreen(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = if (isRegisterMode) "创建你的腕聊账号" else "登录你的腕聊账号",
+                text = if (isRegisterMode) "创建你的聊天账号" else "登录你的聊天账号",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
