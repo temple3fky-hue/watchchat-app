@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 var authState by remember { mutableStateOf(AuthState.Checking) }
                 var selectedChat by remember { mutableStateOf<Chat?>(null) }
+                var chatListRefreshToken by remember { mutableStateOf(0L) }
 
                 LaunchedEffect(Unit) {
                     authState = if (AuthRepository.hasActiveSession()) {
@@ -50,6 +51,7 @@ class MainActivity : ComponentActivity() {
                     scope.launch {
                         AuthRepository.signOut()
                         selectedChat = null
+                        chatListRefreshToken = System.currentTimeMillis()
                         authState = AuthState.Unauthed
                     }
                 }
@@ -73,11 +75,15 @@ class MainActivity : ComponentActivity() {
                             ChatListScreen(
                                 onChatClick = { chat -> selectedChat = chat },
                                 onSignOutClick = { signOut() },
+                                refreshToken = chatListRefreshToken,
                             )
                         } else {
                             ChatDetailScreen(
                                 chat = selectedChat!!,
-                                onBack = { selectedChat = null },
+                                onBack = {
+                                    selectedChat = null
+                                    chatListRefreshToken = System.currentTimeMillis()
+                                },
                             )
                         }
                     }
