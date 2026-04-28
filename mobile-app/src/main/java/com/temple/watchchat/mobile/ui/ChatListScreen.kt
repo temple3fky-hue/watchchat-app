@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 fun ChatListScreen(
     onChatClick: (Chat) -> Unit,
     onSignOutClick: () -> Unit,
+    refreshToken: Long,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -176,8 +177,11 @@ fun ChatListScreen(
     }
 
     LaunchedEffect(Unit) {
-        reloadChats()
         reloadFriends()
+    }
+
+    LaunchedEffect(refreshToken) {
+        reloadChats()
     }
 
     Surface(
