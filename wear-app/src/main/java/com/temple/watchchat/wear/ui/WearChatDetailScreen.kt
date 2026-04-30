@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.temple.watchchat.shared.model.Chat
 import com.temple.watchchat.shared.model.Message
+import com.temple.watchchat.shared.model.MessageStatus
 import com.temple.watchchat.shared.sync.WearSyncEvent
 import com.temple.watchchat.wear.data.WearFakeChatRepository
 import com.temple.watchchat.wear.data.WearSupabaseChatRepository
@@ -103,16 +104,32 @@ fun WearChatDetailScreen(
         text: String,
         isVoiceReply: Boolean = false,
     ) {
-        WearFakeChatRepository.sendQuickReply(
-            chatId = chat.id,
-            content = text,
-        )
-        statusText = if (isVoiceReply) {
-            "语音已发送：$text"
-        } else {
-            "已回复：$text"
+        statusText = "发送中..."
+        WearVibration.tap(context)
+
+        coroutineScope.launch {
+            val sentMessage = WearSupabaseChatRepository.sendTextMessage(
+                chatId = chat.id,
+                content = text,
+            )
+            if (sentMessage.status == MessageStatus.FAILED) {
+                WearFakeChatRepository.sendQuickReply(
+                    chatId = chat.id,
+                    content = text,
+                    status = MessageStatus.FAILED,
+                )
+                statusText = if (WearSupabaseClientProvider.isConfigured) {
+                    "发送失败，已保留本地消息"
+                } else {
+                    "Supabase 未配置，已本地发送"
+                }
+                WearVibration.error(context)
+            } else {
+                WearFakeChatRepository.upsertMessage(sentMessage)
+                statusText = if (isVoiceReply) "语音已发送：$text" else "已回复：$text"
+                WearVibration.success(context)
+            }
         }
-        WearVibration.success(context)
 
         if (isVoiceReply) {
             WearSyncClient.sendVoiceTextReplyRequested(
