@@ -11,6 +11,39 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 object WearSupabaseChatRepository {
+    suspend fun sendTextMessage(
+        chatId: String,
+        content: String,
+    ): Message {
+        val targetChatId = chatId.trim()
+        val cleanContent = content.trim()
+        if (targetChatId.isBlank() || cleanContent.isBlank()) {
+            return failedMessage(chatId = targetChatId.ifBlank { chatId }, content = cleanContent)
+        }
+
+        val client = WearSupabaseClientProvider.client
+            ?: return failedMessage(chatId = targetChatId, content = cleanContent)
+        val currentUserId = client.auth.currentSessionOrNull()?.user?.id
+            ?: return failedMessage(chatId = targetChatId, content = cleanContent)
+
+        return runCatching {
+            val inserted = client.from("messages")
+                .insert(
+                    MessageInsertDto(
+                        chatId = targetChatId,
+                        senderId = currentUserId,
+                        content = cleanContent,
+                    ),
+                ) {
+                    select()
+                }
+                .decodeSingle<MessageDetailDto>()
+
+            inserted.toMessage()
+        }.getOrElse {
+            failedMessage(chatId = targetChatId, content = cleanContent)
+        }
+    }
     /**
      * 第一阶段只读取最近聊天列表。
      *
@@ -112,6 +145,21 @@ object WearSupabaseChatRepository {
     }
 }
 
+private fun failedMessage(
+    chatId: String,
+    content: String,
+): Message {
+    return Message(
+        id = "wear_failed_${System.currentTimeMillis()}",
+        chatId = chatId,
+        senderId = "me",
+        content = content,
+        type = MessageType.TEXT,
+        status = MessageStatus.FAILED,
+        createdAtMillis = System.currentTimeMillis(),
+    )
+}
+
 private fun String?.toEpochMillis(): Long? {
     if (this.isNullOrBlank()) return null
     return runCatching { Instant.parse(this).toEpochMilli() }.getOrNull()
@@ -184,3 +232,15 @@ private data class MessageDetailDto(
         )
     }
 }
+
+@Serializable
+private data class MessageInsertDto(
+    @SerialName("chat_id")
+    val chatId: String,
+    @SerialName("sender_id")
+    val senderId: String,
+    val content: String,
+    @SerialName("message_type")
+    val messageType: String = "text",
+    val status: String = "sent",
+)

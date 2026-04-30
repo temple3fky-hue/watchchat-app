@@ -160,14 +160,17 @@ object WearFakeChatRepository {
     fun sendQuickReply(
         chatId: String,
         content: String,
+        status: MessageStatus = MessageStatus.SENT,
+        senderId: String = "me",
+        messageId: String = "wear_local_${System.currentTimeMillis()}",
     ): Message {
         val now = System.currentTimeMillis()
         val message = Message(
-            id = "wear_local_$now",
+            id = messageId,
             chatId = chatId,
-            senderId = "me",
+            senderId = senderId,
             content = content,
-            status = MessageStatus.SENT,
+            status = status,
             createdAtMillis = now,
         )
 
@@ -180,6 +183,24 @@ object WearFakeChatRepository {
         }
         notifyChanged()
         return message
+    }
+
+    fun upsertMessage(message: Message) {
+        val messages = messagesByChatId.getOrPut(message.chatId) { mutableListOf() }
+        val existingIndex = messages.indexOfFirst { it.id == message.id }
+        if (existingIndex >= 0) {
+            messages[existingIndex] = message
+        } else {
+            messages.add(message)
+        }
+
+        syncedChats[message.chatId]?.let { chat ->
+            syncedChats[message.chatId] = chat.copy(
+                lastMessagePreview = message.content,
+                updatedAtMillis = message.createdAtMillis,
+            )
+        }
+        notifyChanged()
     }
 
     fun simulateIncomingMessage(chatId: String): Message {
