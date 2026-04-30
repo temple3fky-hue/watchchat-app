@@ -108,6 +108,17 @@ fun WearChatDetailScreen(
         WearVibration.tap(context)
 
         coroutineScope.launch {
+            if (!WearSupabaseClientProvider.isConfigured) {
+                WearFakeChatRepository.sendQuickReply(
+                    chatId = chat.id,
+                    content = text,
+                    status = MessageStatus.SENT,
+                )
+                statusText = if (isVoiceReply) "语音已本地发送：$text" else "已本地发送：$text"
+                WearVibration.success(context)
+                return@launch
+            }
+
             val sentMessage = WearSupabaseChatRepository.sendTextMessage(
                 chatId = chat.id,
                 content = text,
